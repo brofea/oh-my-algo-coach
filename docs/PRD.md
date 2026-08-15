@@ -1,6 +1,6 @@
 # Oh My Algo Coach（OMAC）产品需求文档
 
-**版本：** PRD v0.5
+**版本：** PRD v0.6
 **产品代号：** Oh My Algo Coach / OMAC
 **产品形态：** Agent Skill + TypeScript npm CLI + 项目级 `.omac` Runtime
 **核心领域：** ICPC / Codeforces / AtCoder / LeetCode / 算法 / 数据结构 / 竞技编程训练
@@ -341,7 +341,7 @@ Event 命令在概念上提供 `create`、`append` 和 `close` 三种操作。`e
 │   ├── state/
 │   └── views/
 ├── event/                  # Event 工作目录和历史归档
-│   ├── active/             # draft / active / paused / evaluating
+│   ├── <event-id>/         # draft / active / paused / evaluating 状态的 Event 直接存放于此
 │   ├── archive/            # closed / cancelled 的完整 Event 记录
 │   └── index/              # Event ID、时间和状态索引
 ├── evidence/               # Observation、Intervention、Import、Correction
@@ -352,7 +352,7 @@ Event 命令在概念上提供 `create`、`append` 和 `close` 三种操作。`e
 └── runtime/                # Schema、Reducer、Migration、Integrity 元数据
 ```
 
-目录是物理组织方式，不改变逻辑关系：Learner View 必须引用 Claim，Claim 必须引用 Evidence，Evidence 必须能够追溯到 Event 或外部 Artifact。关闭 Event 后，Runtime 可以将其从 `event/active` 归档到 `event/archive/<event-id>/`，但不得静默重写事实记录。
+目录是物理组织方式，不改变逻辑关系：Learner View 必须引用 Claim，Claim 必须引用 Evidence，Evidence 必须能够追溯到 Event 或外部 Artifact。处于工作态的 Event 直接存放于 `event/<event-id>/`，与 `event/archive` 同级；关闭 Event 后，Runtime 将其迁移到 `event/archive/<event-id>/`，但不得静默重写事实记录。原始对话记录（如 Workspace 配置启用保存）属于对应 Event 的内容，保存在 `event/<event-id>/` 下并随 Event 一起归档，不设独立的会话目录。
 
 `.omac` 可以被用户纳入私有版本库，但 OMAC 不自动创建或修改 `.gitignore`。`omac init` 和 `omac doctor` 必须提醒用户不要将其上传到公共仓库；平台 Token、API Key、密码等凭据不得写入 `.omac`。
 
@@ -387,7 +387,7 @@ project/
 `omac init` 必须：
 
 * 幂等创建 `.omac` 目录、一级职责目录和 Schema Metadata；
-* 初始化 `event/active`、`event/archive` 和 `event/index`，保证 Event 的工作态与归档态边界明确；
+* 初始化 `event/`（工作态 Event 目录）、`event/archive` 和 `event/index`，保证 Event 的工作态与归档态边界明确；
 * 初始化 Workspace Identity，并允许显式绑定或创建 `learner_id`；
 * 输出 `.omac` 含有敏感学习数据、不要上传到公共仓库的明确提示；
 * 不主动创建、修改或删除用户的 `.gitignore`；
@@ -418,7 +418,7 @@ Learner Model
 
 Knowledge Model 主要由 Skill 引用的、静态、版本化、可共享的 Knowledge Pack 构成；核心教学政策位于 Skill，具体算法、Pattern、Misconception 和 Pedagogy 内容可以按需加载，不要求每次会话完整注入。
 
-Learner Model 位于 `.omac` 中，是针对具体学生动态产生的数据。
+Learner Model 的 Learner State / Learner View 位于 `.omac` 中，是针对具体学生动态产生的数据。
 
 Knowledge Model 不是一个庞大的算法 Wikipedia，而是一套轻量的、能更好发挥 LLM 算法推理能力的 Coaching Knowledge Pack。初步搭建可以参考 [OI Wiki](https://github.com/OI-wiki/OI-wiki)，但应以 OMAC 自有的 Pattern Card、Misconception Card 和 Pedagogy Card 为主要交付物，并保留内容来源、版本和许可证信息。
 
@@ -674,6 +674,8 @@ Learner Model 是 OMAC 对学生当前状态的动态估计。
 > **Student Digital Twin**
 
 它来自历史 Event 和 Evidence，而不是 Coach 随手维护的一组描述。
+
+本 PRD 中三个相关术语按层面区分：**Learner Model** 是对学生当前状态的动态估计这一概念聚合体；**Learner View** 是 Learner Model 的可持久化 Materialized View，由 Runtime Reducer 从 Evidence 和 Assessment Claim 计算，可追溯、可 Replay、可重建；**Learner State** 指位于 `.omac` 下 Learner View、Learner Profile 等动态数据的物理存储集合。三者描述同一对象的概念、投影与存储三个层面；正文中在概念层面叙述时使用 Learner Model，涉及持久化格式、追溯、版本和重建时指的是 Learner View / Learner State。
 
 核心结构：
 
@@ -970,7 +972,7 @@ Trend
 ```text
 DP State Design
 
-Estimate: 1620
+Estimate: 1450–1750
 Confidence: 0.32
 Evidence Count: 3
 ```
@@ -980,12 +982,14 @@ Evidence Count: 3
 ```text
 DP State Design
 
-Estimate: 1620
+Estimate: 1580–1660
 Confidence: 0.88
 Evidence Count: 26
 ```
 
 含义完全不同。
+
+`Estimate` 以区间表达：Evidence 越少、越旧或质量越低，区间应越宽；区间本身是 `Confidence` 的直观体现，不应在证据不足时收敛为点估计。
 
 低 Confidence 甚至可以成为推荐训练的原因：
 
@@ -1013,8 +1017,6 @@ retained
 ```
 
 这些状态不是互相排斥的全局标签，而是针对某个 `target_id`、Problem Context 和 Independence Boundary 的可追溯 View。
-
-问题。
 
 ---
 
@@ -1077,6 +1079,8 @@ Update
 > **这次活动的主要目的是什么？**
 
 `Learn`、`Practice`、`Upsolve`、`Contest` 和大多数 `Diagnose` Event 应有明确 Target。`Explore` 可以从 Intent 开始，并在训练过程中形成候选 Target。
+
+如果用户在 `Practice` 中直接给出一题而未声明 Target，Coach 应先基于题面和当前 Learner 状态形成候选 Target 建议（标记为 low-confidence / 待确认），并在 Event 过程中根据新产生的 Evidence 确认或修正；不得以 Target 缺失为由拒绝训练，也不得把未确认的候选 Target 静默写入 Learner View。
 
 ```text
 Event Type:
@@ -1206,8 +1210,6 @@ active ↔ paused
 evaluating
   ↓
 closed
-  ↓
- archived
 ```
 
 任何阶段都可以进入：
@@ -1216,7 +1218,7 @@ closed
 cancelled
 ```
 
-`archived` 是已结束 Event 的持久化组织状态，不是新的 Event Type。`closed` 或 `cancelled` Event 在完成最终校验后进入 `.omac/event/archive/<event-id>/`；归档动作不得改变 Event ID、原始 Observation、Intervention 或历史 Claim。
+`archived` 不是独立状态。`close` 在 `closed` 或 `cancelled` 完成最终校验后一次性完成关闭与归档，将 Event 迁移到 `.omac/event/archive/<event-id>/`；不存在等待归档的中间状态，`archived` 只描述已结束 Event 的物理归档位置。归档动作不得改变 Event ID、原始 Observation、Intervention 或历史 Claim。
 
 关闭后的事实不能被静默覆盖。用户纠正、Coach 重新评估或 Schema Migration 都应追加新的记录，并通过 Replay 生成新的 Materialized View。
 
@@ -2050,7 +2052,7 @@ cache_version
 
 ---
 
-## 9.3 Editorial building fallback
+## 9.3 Editorial Building Fallback
 
 当官方 Editorial 不存在或是一道网上没有的题目的时候，Coach 才会尝试：
 
@@ -2367,7 +2369,7 @@ OMAC 不自动创建或修改 `.gitignore`。`.omac` 可以由用户有意识地
 
 用户应通过显式的 Export / Backup 管理副本，并自行决定私有版本库、加密存储或本地忽略策略。
 
-Local-first 不代表所有数据都永远不离开本机。使用外部模型、Web Connector 或平台 API 时，Runtime 和 Skill 必须明确提示数据边界、记录外部传输来源，并尽量对代码、账号、个人信息和训练对话进行脱敏。原始对话是否保存应由 Workspace 配置决定，默认不要求保存完整对话全文。
+Local-first 不代表所有数据都永远不离开本机。使用外部模型、Web Connector 或平台 API 时，Runtime 和 Skill 必须明确提示数据边界、记录外部传输来源，并尽量对代码、账号、个人信息和训练对话进行脱敏。原始对话是否保存应由 Workspace 配置决定，默认不要求保存完整对话全文；如启用保存，对话记录属于对应 Event 的内容，存放在 `event/<event-id>/` 下并随 Event 归档（见 3.3）。
 
 ---
 
@@ -2461,8 +2463,6 @@ OMAC 的用户场景统一归属于六种 Event Type。这些场景可以逐步�
 
 ## 12.1 Learn
 
-一种 Event Type。
-
 学生：
 
 > 教我线段树。
@@ -2481,8 +2481,6 @@ Coach：
 ---
 
 ## 12.2 Practice
-
-一种 Event Type。
 
 学生选择或由 Coach 推荐题目。
 
@@ -2503,8 +2501,6 @@ Problem Recommendation 是 Practice 的前置 Runtime Service，不是新的 Eve
 
 ## 12.3 Upsolve
 
-一种 Event Type。
-
 学生赛后补题。
 
 Coach 可以：
@@ -2520,7 +2516,7 @@ Upsolve 可以包含 Editorial Retrieval、Debug、Teach-back 和 Postmortem，�
 
 ## 12.4 Contest
 
-一种 Event Type，且只用于比赛或 Virtual Contest 结束后的复盘。
+只用于比赛或 Virtual Contest 结束后的复盘。
 
 OMAC 不在比赛进行期间提供解题 Coach。比赛期间可以由用户或平台产生非解题性的外部 Artifact，赛后再导入 Contest Event。
 
@@ -2543,7 +2539,7 @@ OMAC 不在比赛进行期间提供解题 Coach。比赛期间可以由用户或
 
 ## 12.5 Diagnose
 
-一种可以轻量运行的 Event。
+可以轻量运行。
 
 用户可以询问：
 
@@ -2567,7 +2563,7 @@ Diagnose 默认不直接修改 Learner Model。学生确认诊断，或 Coach �
 
 ## 12.6 Explore
 
-一种 Event Type，用于没有预设单一 Target 的探索活动，例如：
+用于没有预设单一 Target 的探索活动，例如：
 
 * 探索一个新算法或数据结构；
 * 比较多个候选 Technique；
@@ -2718,6 +2714,7 @@ V0 的实现原则是：
 * Target Contract、Coaching Mode 和 Independence Boundary 的基础协议；
 * 基础 Transfer Probe Contract，用于在新题或变体题中记录独立迁移结果；
 * LLM 只能提交结构化 Assessment Claim，Runtime 负责校验、Reducer、Materialized View 和 Replay；
+* V0 的 Evaluate 基线：Coach 在 `event close` 时基于 Event 过程记录生成结构化 Assessment Claim，不要求对完整对话逐句评估；Evaluator 升级后，历史 Event 可通过 Replay 重新生成 Claims；
 * 用户纠正、Claim 冲突、`unknown / insufficient_evidence` 和重新评估流程；
 * 本地 Problem Manifest、Knowledge Pack、代码或 Contest Artifact 的显式输入；
 * `Explain Why`、Learner Summary、Event Report 和下一次 Event 的上下文读取；
@@ -2923,6 +2920,10 @@ Algorithm / Pattern / Misconception Graph 如何维护：
 
 不同 Agent Host 的 Skill 结构、Tool 能力、Web 能力不同，应如何设计兼容层？
 
+### Concurrency
+
+`.omac` 可能被同一项目中的多个 Agent Host 或会话并发访问。`event append`、`event close` 与 Learner View Rebuild 同时发生时，需要什么粒度的原子写、文件锁或冲突检测？V0 至少应保证并发 append 不静默丢失记录。
+
 ---
 
 # 15. OMAC 核心抽象
@@ -3050,3 +3051,6 @@ Oh My Algo Coach 不应该成为：
 | D-007 | Locked | `Contest` 只表示赛后复盘；Contest 专项能力归入可选的 V4 Domain Pack，比赛期间不提供解题 Coach。 | 不得把实时比赛辅助设计为 Contest Event；可以讨论赛后 Artifact、Contest Lock 和复盘分析。 |
 | D-008 | Locked | OMAC 不自动创建或修改 `.gitignore`；`.omac` 可能包含敏感学习数据，平台 Token、API Key 和密码不得写入 `.omac`。 | 可以增加 Doctor、提示、脱敏和外部 Secret Store 支持，但不得改变上述默认安全边界。 |
 | D-009 | Locked | PRD 顶部可以保留文档版本元数据；正文不使用 PRD 版本号。`V0–V5` 只表示项目实现阶段。 | 不得把 `v0.x` 混入产品、架构或验收要求；需要表达路线时使用 `V0–V5` 实现阶段。 |
+| D-010 | Locked | 修订 D-005 的目录细节：废弃 `event/active` 目录，处于工作态的 Event 直接存放于 `event/<event-id>/`，与 `event/archive` 同级；`event close` 仍一次性完成关闭与归档。 | 不得恢复 `event/active` 目录，也不得把 `archive` 设计为 Event 工作目录的子目录；原始对话等记录（如启用）随 `event/<event-id>/` 归档。 |
+
+D-010 是对 D-005 的部分修订。触发原因：用户明确要求简化 Event 物理目录结构，并将原始对话记录的存放位置明确在 `event/<event-id>/` 下；D-005 其余约束（`close` 完成关闭和归档、归档不改写事实记录）继续有效。
