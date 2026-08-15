@@ -1,8 +1,8 @@
 # Oh My Algo Coach（OMAC）产品需求文档
 
-**版本：** PRD v0.3
+**版本：** PRD v0.4
 **产品代号：** Oh My Algo Coach / OMAC
-**产品形态：** Agent Skill + TypeScript npm CLI + 项目级 `\.omac` Runtime
+**产品形态：** Agent Skill + TypeScript npm CLI + 项目级 `.omac` Runtime
 **核心领域：** ICPC / Codeforces / AtCoder / LeetCode / 算法 / 数据结构 / 竞技编程训练
 
 ---
@@ -159,7 +159,7 @@ Interpretation
 
 `.omac` 应成为可迁移的学生长期状态载体。
 
-未来用户即使更换模型或 Agent Host，也应能够继续使用自己的学习历史。
+在 v0.4 中，动态数据的物理存储明确位于项目级 `.omac`；但这些数据的逻辑归属仍属于 Learner，而不是某个模型、Agent Host 或 IDE。未来用户即使更换模型或 Agent Host，也应能够通过 `.omac` 的 Schema、Export / Import 和 Migration 继续使用自己的学习历史。
 
 ---
 
@@ -174,7 +174,7 @@ External Information Sources
 Skill ←→ Agent Coach ←→ OMAC CLI
                            │
                            ↓
-                        \.omac
+                         .omac
 ```
 
 其中：
@@ -182,7 +182,7 @@ Skill ←→ Agent Coach ←→ OMAC CLI
 * **Skill**：定义 Agent 如何思考、如何教学、如何操作 CLI；
 * **Agent Coach**：在 Skill 指导下运行的教学与推理主体，负责整合外部信息与 Learner Model 进行决策；
 * **TypeScript CLI**：负责结构化运行时能力与系统操作接口；
-* **`\.omac`**：保存学生长期动态状态。
+* **`.omac`**：保存项目内学生的完整长期动态状态。
 
 四者职责必须清晰分离。
 
@@ -237,7 +237,7 @@ CLI 是 Agent 与本地 OMAC Runtime 之间稳定的能力接口。
 可能承担：
 
 * 初始化；
-* `\.omac` 创建；
+* `.omac` 创建；
 * Event Lifecycle 管理；
 * Evidence 写入；
 * Learner State 查询；
@@ -273,16 +273,16 @@ omac doctor
 
 ---
 
-## 3.3 `\.omac`
+## 3.3 `.omac`
 
-`\.omac` 是项目级 Runtime State。
+`.omac` 是项目级 Runtime State，也是项目内 OMAC 动态数据的完整持久化载体。
 
-所有具体学生的动态状态原则上都保存在 `\.omac` 中。
+所有具体学生的动态状态原则上都保存在项目的 `.omac` 中。项目级存储是有意选择：它让一个项目中的 Agent Host、Skill 和 CLI 共享同一份可追溯状态；跨项目使用时通过 Export / Import 迁移，而不是隐式访问用户 Home 下的全局数据。
 
 逻辑上包括：
 
 ```text
-\.omac/
+.omac/
 ├── config
 ├── profile
 ├── events
@@ -295,7 +295,7 @@ omac doctor
 └── runtime-metadata
 ```
 
-数据记录应轻量化实现，并做到可迁移。
+数据记录应轻量化实现，并做到可迁移。`.omac` 可以被用户纳入私有版本库，但 OMAC 不自动创建 `.gitignore`；初始化和 `omac doctor` 必须提醒用户不要将其上传至公共仓库。
 
 ---
 
@@ -318,12 +318,20 @@ OMAC 初始化应尽可能保持 Local / Project Scoped。
 project/
 ├── package.json
 ├── node_modules/
-├── \.omac/
+├── .omac/
 └── <agent-skill-directory>/
     └── oh-my-algo-coach/
 ```
 
 不同 Agent Host 的 Skill 目录可以不同，但运行时原则一致。
+
+`omac init` 必须：
+
+* 幂等创建 `.omac` 目录和 Schema Metadata；
+* 输出 `.omac` 含有敏感学习数据、不要上传到公共仓库的明确提示；
+* 不主动创建、修改或删除用户的 `.gitignore`；
+* 不主动修改系统级 Node.js、npm、Shell、Python 或用户 Home 下无关配置；
+* 提供显式的 `doctor`、`export` 和 `import` 入口，让用户自行管理风险和备份。
 
 ---
 
@@ -351,7 +359,7 @@ Knowledge Model 主要位于 Skill 中，是静态、版本化、可共享的知
 
 Learner Model 位于 `.omac` 中，是针对具体学生动态产生的数据。
 
-Knowledge Model 不是一个庞大的算法 Wikipedia，而是一套轻量的，能更好发挥出 LLM 在算法上的推理能力的指导书，初步搭建可以克隆仓库 [OI Wiki](https://github.com/OI-wiki/OI-wiki) 并参考
+Knowledge Model 不是一个庞大的算法 Wikipedia，而是一套轻量的、能更好发挥 LLM 算法推理能力的 Coaching Knowledge Pack。初步搭建可以参考 [OI Wiki](https://github.com/OI-wiki/OI-wiki)，但应以 OMAC 自有的 Pattern Card、Misconception Card 和 Pedagogy Card 为主要交付物，并保留内容来源、版本和许可证信息。
 
 ---
 
@@ -936,105 +944,89 @@ Exploitation
 
 # 6. Event Model
 
-Event 是 OMAC 的基本训练单位。
+Event 是 OMAC 面向用户的基本训练单位，也是长期 Evidence 的主要归属边界。
 
-所有有意义的训练活动，都应当归属某一个 Event。
-
-例如：
-
-* 学习新算法；
-* 做一道题；
-* 补题；
-* Debug；
-* 复习；
-* Virtual Contest；
-* Contest Review；
-* 学习路线诊断；
-* 赛前准备。
-
-所有 Event 统一使用四阶段模型：
-
-```text
-Choose Target
-      ↓
-Train
-      ↓
-Evaluate
-      ↓
-Update
-```
-
----
-
-## 6.1 Choose Target
-
-每一次 Event 首先回答：
-
-> **这次训练到底为了什么？**
-
-需要区分：
-
-### Event Type
-
-学生现在正在进行什么活动。
-
-例如：
+OMAC 只有六种稳定的 Event Type：
 
 ```text
 Learn
 Practice
 Upsolve
-Review
-Debug
 Contest
-Contest Review
 Diagnose
 Explore
 ```
 
-### Target
+Event Type 表示 Event 的主要目的，不表示其中包含的每一个教学动作。Review、Debug、Recommendation、Contest Review、Virtual Contest、Teach-back、Postmortem 和 Visualization 都是场景、子流程、Intervention 或 Runtime Service，不得新增为 Event Type。
 
-这次真正训练什么能力。
+| Event Type | 主要目的 | 典型场景 | 是否默认更新 Learner Model |
+|---|---|---|---|
+| `Learn` | 建立或重建知识与技能 | 新知识教学、主动回忆、变体练习、Teach-back | 是 |
+| `Practice` | 在问题解决中训练指定 Target | 做题、Debug 子流程、隐藏标签题、Transfer | 是 |
+| `Upsolve` | 复盘未解决或比赛后题目并形成迁移 | Editorial 研究、原思路对比、Postmortem、迁移题 | 是 |
+| `Contest` | 比赛结束后的表现复盘 | 题目选择、时间管理、换题、风险和实现分析 | 是 |
+| `Diagnose` | 回答或验证学生状态问题 | Rating 卡住、能力探测、Evidence-backed Diagnosis | 仅在确认后 |
+| `Explore` | 探索知识、能力和训练方向 | 新主题试探、候选 Target 发现、开放式研究 | 仅在形成有效 Evidence 后 |
 
-例如：
+其中：
+
+* `Contest` 专指赛后总结，不表示比赛进行中的实时 Coach Event；
+* Virtual Contest 是外部训练活动，结束后可以作为 Artifact 或 Import 进入 `Contest` Event；
+* `Review` 可以是 `Learn` 中的知识复习，也可以是 `Practice` 中的迁移练习；
+* `Debug` 通常是 `Practice` 或 `Upsolve` 内的子流程；
+* `Contest Review` 是 `Contest` Event 的场景名称；
+* `Problem Recommendation` 是 Training Runtime Service；
+* `Teach-back`、`Postmortem` 和 `Visualization` 是 Intervention 或 Event 子流程。
+
+所有 Event 原则上使用四阶段模型：
+
+```text
+Choose Target / Intent
+          ↓
+Train / Explore
+          ↓
+Evaluate
+          ↓
+Update
+```
+
+对于 `Diagnose`，Update 默认是 No-op；只有学生确认诊断结论或产生新的可追溯 Evidence 时，才创建 Learner Model 更新。对于 `Explore`，Target 可以为空或暂定，Coach 应将“发现 Target”本身作为 Event 结果之一。
+
+---
+
+## 6.1 Choose Target / Intent
+
+每一次 Event 首先回答：
+
+> **这次活动的主要目的是什么？**
+
+`Learn`、`Practice`、`Upsolve`、`Contest` 和大多数 `Diagnose` Event 应有明确 Target。`Explore` 可以从 Intent 开始，并在训练过程中形成候选 Target。
 
 ```text
 Event Type:
 Practice
 
 Target:
-DP State Design
+skill.problem-solving.state-design
 ```
 
 或：
 
 ```text
 Event Type:
-Contest Review
+Contest
 
 Target:
-Strategic Switching
+skill.contest.strategic-switching
 ```
 
-又或者：
-
-```text
-Event Type:
-Learn
-
-Target:
-Fenwick Tree
-```
-
-同一个 Event Type 可以训练不同能力。
-
-同一个能力也可以通过不同 Event Type 训练。
+同一个 Event Type 可以训练不同能力；同一个 Target 也可以通过不同 Event Type 训练。
 
 ---
 
-## 6.2 Train
+## 6.2 Train / Explore
 
-Train 是学生与 Coach 的主要互动阶段。
+这是学生与 Coach 的主要互动阶段。
 
 基本循环：
 
@@ -1052,18 +1044,13 @@ Student Response
 
 这里可能产生：
 
-* 学生思路；
-* 假设；
-* 反例；
-* Hint；
-* 实现；
-* Debug；
-* 可视化；
-* Teach-back；
-* 提交结果；
-* 思路转变。
+* 学生思路、假设和反例；
+* Hint、Question、Counterexample 或 Visualization；
+* 代码、运行结果、提交结果和 Debug 过程；
+* Teach-back、Postmortem 和思路转变；
+* 用户对历史事实、做题经历和提示来源的纠正。
 
-这些行为形成 Event Evidence。
+这些行为先形成带来源的 Event Evidence，再由 Evaluation 解释。Coach 不应直接把解释结果写成不可追溯的学生状态。
 
 ---
 
@@ -1071,111 +1058,325 @@ Student Response
 
 Evaluate 回答：
 
-> **本次 Target 实际达成到了什么程度？**
+> **本次 Event 的 Target / Intent 实际达成到了什么程度？**
 
-Evaluation 必须围绕 Target，而不是采用万能评分表。
-
-例如 Learn Event 可能检查：
+Evaluation 必须围绕 Event Type 和 Target，而不是采用万能评分表。
 
 ```text
-Understand
-Explain
-Simulate
-Recall
-Implement
-Recognize
-Transfer
+Learn
+  Understand / Explain / Simulate / Recall / Implement / Transfer
+
+Practice
+  Independent Insight / Hint Disclosure / Solve Time /
+  Implementation Independence / Proof / Debug
+
+Upsolve
+  Original Failure Cause / Insight Distance / Pattern Extraction /
+  Transfer Readiness
+
+Contest
+  Problem Selection / Time Usage / Direction Switching /
+  Implementation / Debugging / Risk Management
+
+Diagnose
+  Evidence Sufficiency / Alternative Explanations / Confidence /
+  Student Confirmation
+
+Explore
+  New Observation / Candidate Target / Knowledge Gain /
+  Follow-up Value
 ```
 
-Practice Event 可能检查：
-
-```text
-Independent Insight
-Hint Level
-Solve Time
-Implementation Independence
-Proof
-Debug
-```
-
-Contest Event 可能检查：
-
-```text
-Problem Selection
-Time Usage
-Direction Switching
-Implementation
-Debugging
-Risk Management
-```
+Evaluation 输出的是结构化 Assessment Claim，而不是直接修改 Learner Model。
 
 ---
 
 ## 6.4 Update
 
-Event 结束后，Evidence 被解释并用于更新 Learner Model。
+Event 结束后，Evidence 被解释为 Assessment Claim，并由 Runtime Reducer 更新 Learner Model。
 
-一次 Event 可能同时更新：
+一次 Event 可能同时产生：
 
 ```text
 Algorithm Ability ↑
 Problem-Solving Ability ↑
 Misconception confirmed
-Retention schedule created
-Dependency slightly ↑
+Retention candidate created
+Coach Dependency changed
 Contest skill unchanged
 ```
 
 Update 还可能产生：
 
-* 下一次 Review；
-* 后续 Problem Recommendation；
+* 下一次 Learn / Practice / Review 场景；
+* 后续 Problem Recommendation 请求；
 * 新的 Target 候选；
 * Misconception 追踪任务；
 * Coach Teaching Evidence。
 
+所有 Update 必须保留 Evidence、Assessment Claim、Evaluator Version 和 Reducer Version 的关联。
+
 ---
 
-## 6.5 Event Contract
+## 6.5 Event Lifecycle
 
-不同 Event Type 应拥有自己的结构化 Contract。
+Event 的状态与 Event Type 分离。状态不是新的 Event Type。
 
-例如 Practice Event：
+```text
+draft
+  ↓
+active ↔ paused
+  ↓
+evaluating
+  ↓
+closed
+```
+
+任何阶段都可以进入：
+
+```text
+cancelled
+```
+
+关闭后的事实不能被静默覆盖。用户纠正、Coach 重新评估或 Schema Migration 都应追加新的记录，并通过 Replay 生成新的 Materialized View。
+
+比赛安全状态也不是 Event Type：
+
+```text
+contest_lock = true
+```
+
+当用户明确声明正在参加比赛，或外部平台识别出正在进行的比赛时，OMAC 只允许记录非解题性的时间和行为元数据；比赛结束后才可以创建 `Contest` Event。
+
+---
+
+## 6.6 Event Contract
+
+所有 Event 都应包含以下公共字段：
+
+```text
+id
+event_type
+schema_version
+learner_id
+target_ids / intent
+problem_ref / contest_ref
+mode
+status
+started_at
+ended_at
+provenance
+```
+
+各 Event Type 使用自己的结构化 Contract。
+
+### Learn
+
+```text
+Input
+- Concept / Knowledge Pack
+- Prerequisites
+- Target
+
+Observe
+- Explanation
+- Manual Simulation
+- Teach-back
+- Recall / Implementation
+
+Evaluate
+- Understanding
+- Recall
+- Recognition
+- Transfer
+
+Update
+- Algorithm Ability
+- Retention Candidate
+- Next Review Scene
+```
+
+### Practice
 
 ```text
 Input
 - Problem
 - Target
+- Coaching Mode
 
 Observe
 - Student Ideas
 - Attempts
-- Hints
-- Code
-- Result
+- Interventions
+- Code / Run / Submission Result
+- Time and Hint Disclosure
 
 Evaluate
-- Insight Independence
+- Independent Insight
 - Hint Dependency
 - Implementation
-- Mistakes
+- Proof
+- Debug / Misconception
 
 Update
-- Learner State
-- Retention
-- Next Training
+- Learner Views
+- Retention Evidence
+- Next Target Candidate
 ```
 
-Learn / Review / Contest 等拥有自己的 Contract。
-
-这样可以避免 Skill 最终演化为数百条互相冲突的：
+### Upsolve
 
 ```text
-if user does X...
-if user says Y...
+Input
+- Problem
+- Original Attempt / Contest Artifact
+- Editorial or Verified Solution Sources
+
+Observe
+- Original Direction
+- Failure Cause
+- Distance to Key Insight
+- Teach-back / Transfer Attempt
+
+Evaluate
+- Pattern Extraction
+- Transfer Readiness
+- Misconception / Knowledge Gap
+
+Update
+- Learner Views
+- Follow-up Practice Candidate
 ```
 
-OMAC 应表现得更像一个具有 Protocol 的 Harness。
+### Contest
+
+```text
+Input
+- Finished Contest / Virtual Contest Artifact
+- Problem Selection and Submission History
+
+Observe
+- Open Time
+- Thinking Duration
+- Direction Changes
+- Switch / Abandon Time
+- Submission and Debug Timeline
+
+Evaluate
+- Problem Selection
+- Time Management
+- Strategic Switching
+- Risk Management
+
+Update
+- Contest Ability
+- Contest-specific Targets
+- Follow-up Practice Candidate
+```
+
+### Diagnose
+
+```text
+Input
+- User Question
+- Relevant Event / Evidence Scope
+
+Observe
+- Supporting Evidence
+- Contradicting Evidence
+- Alternative Explanations
+
+Evaluate
+- Diagnosis
+- Confidence
+- Evidence Sufficiency
+- Student Confirmation
+
+Update
+- No-op by default
+- Confirmed Diagnostic Evidence when accepted
+```
+
+### Explore
+
+```text
+Input
+- User Intent or Open Topic
+- Optional Target
+
+Observe
+- New Concepts
+- Candidate Patterns
+- Questions and Hypotheses
+- Follow-up Value
+
+Evaluate
+- Knowledge Gain
+- Candidate Target
+- Need for Learn / Practice / Upsolve
+
+Update
+- Only confirmed and traceable Evidence
+```
+
+OMAC 应表现得更像一个具有 Protocol 的 Harness，而不是由大量互相冲突的 `if user does X...` 规则组成的 Prompt。
+
+---
+
+## 6.7 Target Contract
+
+Target 不是一句自然语言愿望，而是一次 Event 可观察、可评估的训练目标。
+
+每个 Target 至少应定义：
+
+```text
+target_id
+target_version
+name
+category
+prerequisites
+observable_behaviors
+success_criteria
+failure_taxonomy
+required_evidence
+transfer_probe
+evaluation_rubric
+```
+
+例如 `skill.problem-solving.state-design` 的 Success Criteria 可以包括：
+
+* 学生能说明 State 表示什么；
+* 学生能说明 State 保留了哪些必要信息；
+* 学生能指出 Transition 依赖的前置状态；
+* 学生能用边界或反例验证 State 是否足够；
+* 学生能在未显式给出算法名称时迁移到新题面。
+
+没有 Target Contract 时，Evaluation 很容易退化为 Coach 的主观总结。
+
+---
+
+## 6.8 Coaching Mode
+
+Event Type 表示训练目的，Coaching Mode 表示当前允许的帮助边界。不同学生可以在相同 Event Type 下选择不同模式。
+
+```text
+Practice
+  最小有效帮助，记录 Hint Disclosure
+
+Learn
+  允许更完整的概念解释和示例
+
+Upsolve
+  允许逐步接近完整解法，但仍要求 Postmortem 和 Transfer
+
+Direct Explanation
+  用户明确要求完整解释；结果标记为 Assisted，不作为独立解题证据
+
+Contest Lock
+  比赛期间只记录非解题性元数据，不提供解法、调试或答案
+```
+
+Coach 可以建议 Mode，但用户拥有最终选择权。用户主动提高帮助等级时，应记录为 Evidence，而不是把它视为异常。
 
 ---
 
@@ -1512,6 +1713,8 @@ Transfer
 
 ## 8.4 Spaced Review
 
+Spaced Review 不是独立 Event Type，而是 `Learn` 或 `Practice` Event 中的一种训练场景。它可以由 Retention Model 产生，也可以由用户主动发起。
+
 复习不能只是重复原题。
 
 理想路径：
@@ -1560,15 +1763,13 @@ Upsolve 场景与 Practice 不同。
 
 ---
 
-## 8.6 Contest Training
+## 8.6 Contest Event：赛后复盘
 
-OMAC 应支持：
+`Contest` Event 只在比赛或 Virtual Contest 结束后创建。OMAC 不把比赛进行中的实时辅助建模为 Contest Event，也不在比赛期间提供解题、调试或答案建议。
 
-* Virtual Contest；
-* Contest Simulation；
-* Contest Review。
+Virtual Contest、Contest Simulation 等属于外部训练活动；结束后可以导入其 Artifact，作为 Contest Event 的输入。
 
-比赛中重点记录：
+赛后重点分析：
 
 ```text
 Problem Open Time
@@ -1580,8 +1781,6 @@ Debug Time
 Switch Time
 Abandon Time
 ```
-
-赛后再结合结果分析：
 
 * Problem Selection；
 * Strategic Switching；
@@ -1635,9 +1834,9 @@ Recency
 
 # 9. Agent Web Research & External Problem Ecosystem
 
-OMAC 必须会用现代 Agent 的联网搜索和网页访问能力。
+OMAC 应通过 Connector 使用现代 Agent 的联网搜索和网页访问能力。
 
-联网不是附加功能，它是 Coach 接触真实竞赛世界的基础能力。
+联网不是核心训练闭环的前置条件，而是 Coach 接触真实竞赛世界的可替换能力。即使没有网络，OMAC 也必须能够使用用户提供的 Problem Manifest 或本地 Artifact 完成训练。
 
 核心原则：
 
@@ -1647,7 +1846,7 @@ OMAC 必须会用现代 Agent 的联网搜索和网页访问能力。
 
 ## 9.1 Codeforces / AtCoder First-class Support
 
-第一阶段至少应能可靠处理：
+外部生态接入后，至少应能可靠处理：
 
 > **Codeforces**
 
@@ -1672,7 +1871,7 @@ Problem URL
 * Samples；
 * Problem Metadata；
 * Difficulty / Rating（如存在）；
-* 官方 Editorial（如存在）。
+* 官方 Editorial（如存在，且通过来源与内容政策检查）。
 
 用户不应被要求每次手工复制完整题面。
 
@@ -1712,6 +1911,19 @@ Student:
 ```
 
 这是 OMAC 的重要能力。
+
+所有外部内容都必须带有：
+
+```text
+source_url
+source_type
+retrieved_at
+content_license / usage_policy
+contest_status
+cache_version
+```
+
+如果无法确认题目状态、内容来源或平台规则，Coach 应降级为只使用用户提供的本地内容，而不是自动生成解法。
 
 ---
 
@@ -1782,14 +1994,18 @@ OMAC 要形成的是：
 ```text
 Training Event
       ↓
-Evidence
+Immutable Event Records
       ↓
-Evaluators / Reducers
+Observations / Interventions
       ↓
-Learner Model
+Assessment Claims
+      ↓
+Deterministic Reducers
+      ↓
+Learner Views
 ```
 
-Event 和 Evidence 是长期历史。
+面向用户的 Event 是训练活动边界；Event Record 是其内部不可变的事实记录。Evidence 可以是原始 Observation，也可以是带来源的 Intervention、Submission、Import 或 User Correction。Assessment Claim 是对 Evidence 的解释，不是原始事实。
 
 各类：
 
@@ -1801,7 +2017,7 @@ Event 和 Evidence 是长期历史。
 
 属于可重新计算的 Materialized State。
 
-未来 Evaluator 更新时，应尽可能支持：
+未来 Evaluator 或 Reducer 更新时，应尽可能支持：
 
 ```text
 Replay Events
@@ -1810,11 +2026,13 @@ Replay Events
 
 本 PRD 不强制采用严格的 Event Sourcing 技术实现，但要求保留这一数据思想。
 
+LLM 不得直接覆盖 Learner Model。LLM 只能提交结构化 Assessment Claim，Runtime 负责 Schema 校验、版本记录、用户确认策略和 Materialized View 更新。
+
 ---
 
 ## 10.2 Evidence
 
-Evidence 应记录足够结构化的信息，例如：
+Evidence 应记录足够结构化的信息。以下是原始 Observation 的例子：
 
 ```text
 Student independently discovered monotonicity.
@@ -1839,6 +2057,52 @@ Evidence 应带必要上下文，例如：
 * Confidence；
 * Problem；
 * Related Concepts。
+
+推荐区分以下记录：
+
+```text
+Observation
+- 发生了什么
+- 谁观察到
+- 发生时间
+- 原始内容或摘要
+
+Intervention
+- Coach 做了什么
+- Intervention Type
+- Disclosure
+- 是否由学生请求
+
+Assessment Claim
+- 对哪些 Skill 做出什么判断
+- 使用哪些 Evidence
+- Evaluator / Model Version
+- Confidence
+
+Learner View
+- Reducer 计算出的当前状态
+- View Version
+- 可追溯的 Claim / Evidence IDs
+```
+
+Assessment Claim 至少应具备以下机器可校验字段：
+
+```text
+claim_id
+skill_id
+assessment
+evidence_ids
+evidence_quality
+confidence
+evaluator_version
+model_provenance
+created_at
+supersedes / contradicted_by
+```
+
+`confidence` 只表示当前判断的不确定性，不等同于学生能力分数，也不等同于 Evidence Quality。三者必须分开存储。
+
+原始 Observation 和 Intervention 不因模型更新而静默修改；错误判断通过新的 Assessment Claim 或 User Correction 重新解释。
 
 ---
 
@@ -1948,7 +2212,11 @@ Schema Version
 
 > **Local-first**
 
-`\.omac` 目录里应该有一份写着一个 `*` 的 `.gitignore`。
+OMAC 不自动创建或修改 `.gitignore`。`.omac` 可以由用户有意识地纳入私有版本库，但 `omac init` 和 `omac doctor` 必须持续提醒：
+
+> **`.omac` 可能包含学习弱点、代码、对话和账号信息，不要上传到公共仓库或公开分享。**
+
+用户应通过显式的 Export / Backup 管理副本，并自行决定私有版本库、加密存储或本地忽略策略。
 
 ---
 
@@ -2036,13 +2304,13 @@ Observed Learning Gain
 
 # 12. 核心用户场景
 
-OMAC 第一阶段至少需要覆盖以下场景。
+OMAC 的用户场景统一归属于六种 Event Type。不同版本逐步实现这些场景，但不得通过增加新的 Event Type 解决功能扩展问题。
 
 ---
 
 ## 12.1 Learn
 
-一种主要的 Event Type。
+一种 Event Type。
 
 学生：
 
@@ -2054,14 +2322,16 @@ Coach：
 * 使用 Top-down；
 * 必要时可视化；
 * 进行 Teach-back；
-* 创建 Retention 后续任务；
+* 创建 Retention 场景或后续任务；
 * 更新 Algorithm Ability。
+
+主动回忆、重新实现、变体练习和 Spaced Review 都可以作为 `Learn` Event 内的场景。
 
 ---
 
 ## 12.2 Practice
 
-一种主要的 Event Type。
+一种 Event Type。
 
 学生选择或由 Coach 推荐题目。
 
@@ -2072,14 +2342,17 @@ Coach：
 * 默认执行 Hint Ladder；
 * 记录思考轨迹；
 * 控制答案泄露；
-* 完成 Postmortem；
+* 在需要时进入 Debug 子流程；
+* 完成 Postmortem 场景；
 * 更新 Learner Model。
+
+Problem Recommendation 是 Practice 的前置 Runtime Service，不是新的 Event Type。
 
 ---
 
 ## 12.3 Upsolve
 
-一种主要的 Event Type。
+一种 Event Type。
 
 学生赛后补题。
 
@@ -2092,72 +2365,18 @@ Coach 可以：
 * 提炼 Pattern；
 * 设计一道迁移练习。
 
----
+Upsolve 可以包含 Editorial Retrieval、Debug、Teach-back 和 Postmortem，但这些都不改变 Event Type。
 
-## 12.4 Review
+## 12.4 Contest
 
-一种主要的 Event Type。
+一种 Event Type，且只用于比赛或 Virtual Contest 结束后的复盘。
 
-根据 Retention Model：
-
-* 主动回忆；
-* 重新实现；
-* 做变体；
-* 做隐藏标签问题；
-* 测试 Transfer。
-
----
-
-## 12.5 Debug
-
-一般是 Practice Event 的一部分。
-
-Coach 不只找 Bug。
-
-还需要判断：
-
-```text
-Implementation Error
-vs
-Conceptual Error
-vs
-Invariant Error
-```
-
-若属于纯实现错误，避免重新讲完整算法。
-
-若反复出现，则可能形成 Debug / Misconception Evidence。
-
----
-
-## 12.6 Problem Recommendation
-
-一般是 Practice Event 的一部分。
-
-学生：
-
-> 我不知道今天做什么。
-
-Coach 根据 Learner Model 和 Web：
-
-* Choose Target；
-* 搜索候选题；
-* 排除已做题；
-* 考虑 Learning Gain；
-* 给出少量解释；
-* 创建 Event。
-
----
-
-## 12.7 Contest
-
-一种主要的 Event Type。
-
-OMAC 主要进行赛后 Review
+OMAC 不在比赛进行期间提供解题 Coach。比赛期间可以由用户或平台产生非解题性的外部 Artifact，赛后再导入 Contest Event。
 
 * 记录时间；
 * 记录题目选择；
-* 赛后统一分析，更新 Learner Model。
+* 记录提交、换题、放弃和 Debug 时间线；
+* 赛后统一分析并更新 Learner Model。
 
 重点分析：
 
@@ -2171,9 +2390,9 @@ OMAC 主要进行赛后 Review
 
 ---
 
-## 12.8 Diagnose
+## 12.5 Diagnose
 
-一种轻量的 Event，不需要记录在案
+一种可以轻量运行的 Event。
 
 用户可以询问：
 
@@ -2190,6 +2409,38 @@ Coach 应综合：
 * Retention；
 
 给出 Evidence-backed Diagnosis。
+
+Diagnose 默认不直接修改 Learner Model。学生确认诊断，或 Coach 产生新的可追溯 Evidence 后，才写入 Diagnostic Evidence。
+
+---
+
+## 12.6 Explore
+
+一种 Event Type，用于没有预设单一 Target 的探索活动，例如：
+
+* 探索一个新算法或数据结构；
+* 比较多个候选 Technique；
+* 发现学生可能的 Knowledge Gap 或 Reasoning Skill Gap；
+* 试探适合当前学生的教学方式；
+* 发现下一次 Learn、Practice 或 Upsolve 的候选方向。
+
+Explore 不以“完成一题”作为唯一成功标准。它可以以新的 Observation、候选 Target、待验证假设或后续 Event 建议结束。
+
+---
+
+## 12.7 场景与 Event Type 映射
+
+| 场景 / 功能 | 所属 Event Type 或层级 |
+|---|---|
+| Review / Spaced Review | `Learn` 或 `Practice` 内的训练场景 |
+| Debug | `Practice` 或 `Upsolve` 内的子流程 |
+| Contest Review | `Contest` Event 的场景 |
+| Virtual Contest / Contest Simulation | 外部训练活动，结束后导入 `Contest` |
+| Problem Recommendation | Training Runtime Service |
+| Teach-back | Intervention / Evaluation 子流程 |
+| Postmortem | `Practice`、`Upsolve` 或 `Contest` 内的场景 |
+| Visualization | Intervention |
+| Learner Diagnosis | `Diagnose` Event |
 
 ---
 
@@ -2214,14 +2465,29 @@ OMAC 的成功不能主要通过：
 - Calibration: OMAC 对学生能力和 Solve Probability 的判断是否准确。
 - Coach Effectiveness: 不同 Intervention 是否实际产生 Learning Gain。
 - Dependency: 学生能力增长是否伴随着合理下降的 AI Intervention。
-  
+
+这些指标不能直接作为没有上下文的单一分数。每个指标都必须附带：
+
+```text
+metric_definition
+denominator
+event_type
+target_scope
+time_window
+independence_boundary
+evidence_quality
+confidence
+```
+
+OMAC 应根据当前已经启用的产品能力选择适用指标。Independent Solve Rate 必须明确“独立”的边界，例如是否允许某类 Hint、是否看过 Editorial、是否做过同题；否则不同 Event 之间不可比较。
+
 ---
 
 # 14. 产品边界与实现注意事项
 
-OMAC 的完整愿景很大。
+OMAC 的完整愿景很大，因此采用 V0–V5 六阶段交付。每个阶段都有清晰的目标和验收标准；阶段名称不是新的 Event Type。
 
-V1 的目标应该是：
+V0–V5 共同围绕以下长期闭环演进：
 
 > **打通长期闭环，而不是一次做完所有智能化能力。**
 
@@ -2249,60 +2515,130 @@ Use History in Next Event
 
 ---
 
-## 14.1 V1 建议核心能力
+## 14.1 V0：Local Coaching Loop
 
-V1 优先完成：
+目标：在不依赖外部平台、不依赖复杂数学模型的前提下，打通 OMAC 的最小长期闭环。
 
-* Skill；
-* TypeScript npm CLI；
-* 项目级初始化；
-* `.omac`；
-* Stable Ontology 基础；
-* Event Protocol；
-* Learn Event；
-* Practice Event；
+交付内容：
+
+* Agent Skill、TypeScript npm CLI 和项目级 `.omac` 初始化；
+* 六种 Event Type 的稳定 Schema 和 Event Lifecycle；
+* `Practice` 的完整垂直切片；
+* `Diagnose` 和 `Explore` 的基础流程；
+* `Learn` 的基础知识输入与总结流程；
+* Event / Evidence / Intervention Persistence；
+* Observation、Assessment Claim 和 Learner View 的基础数据契约；
+* 基础 Schema Validation、Replay、Migration、Export、Import 和 Doctor；
+* Evidence Traceability 和用户纠正；
+* 基础 Learner Summary 与 Event Report；
+* Contest Lock Policy：识别或手动声明比赛期间时，不提供解题辅助；
+* `.omac` 公共仓库风险提示，不自动创建或修改 `.gitignore`。
+
+V0 不要求自动搜索题目、完整 Knowledge Graph、准确 Rating 或高级 Retention Model。
+
+V0 验收标准：
+
+```text
+Init
+→ Start Event
+→ Record Evidence
+→ Evaluate
+→ Update Learner
+→ Explain Why
+→ Rebuild from History
+```
+
+进程重启后 Event 不丢失；Learner View 可以追溯到 Evidence；修改或纠正 Assessment Claim 后可以 Replay；下一次 Event 可以读取上一 Event 的结果。
+
+## 14.2 V1：Practice & Upsolve
+
+目标：验证 OMAC 最核心的教学差异——最小有效帮助能否提高独立解题能力。
+
+交付内容：
+
+* 完整 Hint Policy 和 Intervention Disclosure 记录；
+* Practice 的 Target Contract 与 Target-specific Rubric；
+* Teach-back、Postmortem、Transfer Probe；
+* Practice 内的 Debug 子流程；
 * Upsolve Event；
-* Review Event；
-* Hint Ladder；
-* Teach-back；
-* Event / Evidence Persistence；
-* Algorithm Ability 基础模型；
-* Problem-Solving Ability 基础模型；
-* Misconception 基础模型；
-* Retention 基础模型；
-* Evidence Traceability；
-* Codeforces 数据导入基础；
-* Codeforces / AtCoder Web Retrieval；
-* Editorial Retrieval；
-* Problem Recommendation 基础；
-* Learner Summary；
-* Event Report；
-* Schema Version / Migration 基础；
-* Export / Import 基础。
+* 原始思路、失败原因、关键突破口和迁移准备度分析；
+* 用户主动提供的题面、Problem Manifest 和本地题目 Artifact；
+* Algorithm Ability、Problem-Solving Ability 和 Misconception 的基础 Materialized Views；
+* Assisted / Independent 训练结果区分；
+* 允许学生按模式选择帮助程度：Practice、Learn、Upsolve 或 Direct Explanation。
+
+V1 验收重点：同类问题中，独立解决、首次提示时间、Hint Disclosure 和 Transfer Probe 结果能够被稳定记录，并影响后续 Target 或 Intervention 选择。
+
+## 14.3 V2：Learn & Retention
+
+目标：把一次性做题训练扩展为知识建立、主动回忆和延迟迁移。
+
+交付内容：
+
+* Learn Event 的完整教学流程；
+* Prerequisite、Algorithm Knowledge Pack 和 Pattern Card 基础版本；
+* Review 作为 Learn / Practice 内场景的统一协议；
+* Recall、Recognition、Generation、Transfer 的区分；
+* 基础 Retention Schedule，不要求一开始使用复杂遗忘模型；
+* Small Variation、Different Statement、Combined Technique 和 Novel Transfer；
+* 教学 Intervention 的即时结果与延迟结果关联。
+
+V2 验收重点：学生在间隔一段时间后，仍能主动回忆、解释或迁移已训练内容；系统能区分“当时听懂”与“后来仍会”。
+
+## 14.4 V3：Problem Ecosystem & Recommendation
+
+目标：让 OMAC 从用户主动提供题目，演进到可审计的外部题目生态和基础推荐。
+
+交付内容：
+
+* Codeforces、AtCoder 等 Platform Connector；
+* Problem、Contest、Submission、Editorial 的来源、版本和缓存；
+* 题目状态、已做记录、题面和 Editorial 使用政策；
+* 基于过滤、Target Coverage、难度、Novelty 和历史的确定性推荐基线；
+* Exploration 与 Exploitation 的基础分流；
+* Web 失败、限流、题面缺失和 Editorial 不存在时的离线降级；
+* Problem Pattern Card 与题目实例的关联；
+* Connector Capability Manifest。
+
+V3 验收重点：推荐可解释、可复现、可排除已做题；网络不可用时不破坏已有训练；来源和内容政策可追溯。
+
+## 14.5 V4：Contest Retrospective
+
+目标：把 Contest Event 做成严格的赛后复盘系统，而不是实时解题助手。
+
+交付内容：
+
+* 比赛和 Virtual Contest Artifact 导入；
+* 题目打开时间、思考时间、换题、放弃、提交和 Debug 时间线；
+* Problem Selection、Strategic Switching、Time Management、Risk Management 分析；
+* Contest Ability Materialized View；
+* 赛后 Upsolve 的关联；
+* Contest Lock 的平台状态识别、用户确认和审计日志；
+* 赛后生成 Follow-up Practice / Learn Event 建议。
+
+V4 验收重点：系统能够说明“比赛表现损失发生在哪里”，并区分算法不会、没有识别、实现慢、Debug 慢和止损过晚。
+
+## 14.6 V5：Adaptive Coaching Ecosystem
+
+目标：在前面阶段积累足够 Evidence 后，发展更成熟的自适应 Coach 生态。
+
+交付内容：
+
+* 更成熟的 Rating、Calibration 和 Solve Probability；
+* 高级 Retention Model；
+* Coach Intervention Self-Evaluation；
+* Student × Problem Type × Difficulty × Intervention 的 Observed Learning Gain；
+* 教学 Policy 的可解释自适应；
+* 更多 Agent Host 与 Platform Connector；
+* Interactive Visualization 和可复用教学工具；
+* Long-term Curriculum Planning；
+* Knowledge / Pattern / Misconception Pack 的社区协作与版本治理。
+
+V5 不是构建一个不可解释的“学生数字替身”，而是在 Evidence、Confidence、Traceability 和用户控制的前提下，逐步提高 Coach 的自适应能力。
 
 ---
 
-## 14.2 后续演进
-
-后续可以逐渐增加：
-
-* 更高级 Rating；
-* 完整 Contest Digital Twin；
-* Virtual Contest 自动分析；
-* 高级 Problem Recommendation；
-* Expected Learning Gain 模型；
-* Coach Teaching Policy Learning；
-* 更成熟的 Retention Model；
-* 更多平台；
-* Interactive Visualization；
-* Manim Pipeline；
-* Thinking Style 建模；
-* 长期 Curriculum Planning；
-* 更成熟的 Student Digital Twin。
-
----
-
-## 14.3 非目标
+## 14.7 非目标
 
 OMAC 不是要做这些事：
 
@@ -2313,10 +2649,10 @@ OMAC 不是要做这些事：
 - 用一个数字定义学生——Rating 只是摘要。
 - 自动保证 Rating 提升——OMAC 优化训练过程，但不能承诺竞技结果。
 - 让 AI 代替学生思考——这与产品核心目标相反。
-- 
+
 ---
 
-## 14.4 关键开放问题
+## 14.8 关键开放问题
 
 以下问题交由后续 Architecture / RFC 阶段进一步确定。
 
@@ -2375,7 +2711,7 @@ Algorithm / Pattern / Misconception Graph 如何维护：
 
 ---
 
-# 17. OMAC 核心抽象
+# 15. OMAC 核心抽象
 
 整个产品最终围绕六个核心概念运行：
 
@@ -2440,7 +2776,7 @@ Update
 
 ---
 
-# 18. 最终产品定位
+# 16. 最终产品定位
 
 Oh My Algo Coach 不应该成为：
 
@@ -2474,3 +2810,14 @@ Oh My Algo Coach 不应该成为：
 > **“以前这种题我必须问 OMAC，现在我已经能自己想出来了。”**
 
 这应当成为 Oh My Algo Coach 最核心的产品价值。
+
+---
+
+# 17. 评审决策记录
+
+## v0.4 PRD
+
+* OMAC 面向多类型学生，通过 Learner Profile、Target 和 Coaching Mode 适配差异，不预设单一 ICP。
+* 所有项目内动态状态保存在项目级 `.omac`；不自动创建 `.gitignore`，但必须提醒用户不要上传公共仓库。
+* Event Type 固定为 `Learn`、`Practice`、`Upsolve`、`Contest`、`Diagnose`、`Explore`；其他名称均为场景、子流程、Intervention 或 Runtime Service。
+* `Contest` 只表示赛后复盘；具体 V0–V5 交付路线保留在第 14 节。
