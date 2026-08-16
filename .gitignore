@@ -1,8 +1,5 @@
 node_modules/
 packages/cli/dist/
 packages/cli/dist-test/
-.trellis/.developer
-.trellis/.runtime/
-.trellis/workspace/
-.trellis/tasks/
 .opencode/goals/
+.DS_Store
