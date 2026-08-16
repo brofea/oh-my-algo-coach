@@ -1,0 +1,4 @@
+interface:
+  display_name: "OMAC Coach"
+  short_description: "Adaptive algorithm coaching with traceable learner state"
+  default_prompt: "Use $omac-coach to run a traceable algorithm coaching session with minimum effective help."

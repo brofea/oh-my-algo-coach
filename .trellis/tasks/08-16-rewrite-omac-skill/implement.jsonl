@@ -1,0 +1,4 @@
+{"file":"docs/PRD.md","reason":"产品、Skill 边界、Event、教学、证据和 V0–V2 交付契约的唯一业务来源。"}
+{"file":".trellis/spec/cli/core/omac-cli-core-spec.md","reason":"CLI 命令、状态门禁、Claim/Rebuild/Reevaluate、V1–V5 运行时契约，确保 Skill 指令只调用真实协议。"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"遵循项目中已有协议和可复用能力，避免在 Skill 中重复实现 Runtime。"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"校验 Skill、CLI、.omac 和 Learner View 的跨层职责边界。"}

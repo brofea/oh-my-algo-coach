@@ -1,0 +1,4 @@
+{"file":"docs/PRD.md","reason":"按 PRD 验证 Skill 的产品原则、Event Type、教学流程、隐私边界和验收路径。"}
+{"file":".trellis/spec/cli/core/omac-cli-core-spec.md","reason":"按 Runtime Core Spec 验证 CLI 命令和状态/Claim 门禁没有写错。"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"验证没有把已有 Runtime 能力重复写成 Skill 内脚本或伪实现。"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"验证 Skill 文档与 CLI、.omac、Learner View 的职责和数据流一致。"}
