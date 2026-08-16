@@ -1,6 +1,7 @@
 # Oh My Algo Coach（OMAC）产品需求文档
 
-**版本：** PRD v0.8
+**版本：** v0.1
+**PRD 版本：** v0.8
 **产品代号：** Oh My Algo Coach / OMAC
 **产品形态：** Agent Skill + TypeScript npm CLI + 项目级 `.omac` Runtime
 **核心领域：** ICPC / Codeforces / AtCoder / LeetCode / 算法 / 数据结构 / 竞技编程训练
