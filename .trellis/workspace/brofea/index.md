@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 8
+- **Total Sessions**: 9
 - **Last Active**: 2026-08-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~271 | Active |
+| `journal-1.md` | ~304 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 9 | 2026-08-16 | Repository-local GitHub Release CLI bootstrap | `3245d23` | `main` |
 | 8 | 2026-08-16 | Chinese OMAC Skill | `d7fee93` | `main` |
 | 7 | 2026-08-16 | Rewrite OMAC Codex Skill | `935cd77` | `main` |
 | 6 | 2026-08-16 | V5 Adaptive Coaching Research & Ecosystem | `666e48116d8affaa7d6826ffbc0f6657e9fed4bd` | `main` |

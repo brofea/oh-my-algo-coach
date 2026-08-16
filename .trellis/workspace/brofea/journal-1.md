@@ -269,3 +269,36 @@ Rewrote skill/omac into a Codex Skill Creator package with SKILL.md, generated a
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: Repository-local GitHub Release CLI bootstrap
+
+**Date**: 2026-08-16
+**Task**: Repository-local GitHub Release CLI bootstrap
+**Branch**: `main`
+
+### Summary
+
+Implemented repository-local GitHub Release CLI installation with v<major>.<minor> tags, SHA256 manifests, local .agents/cli version storage, CLI-driven Skill synchronization under .agents/skill/omac, release packaging, and bootstrap regression tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3245d23` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
