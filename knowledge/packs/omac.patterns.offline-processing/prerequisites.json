@@ -1,0 +1,16 @@
+{
+  "concepts": [
+    {
+      "concept_id": "algo.data-structure.bit",
+      "prerequisites": ["algo.binary-search.basic", "data-structure.array"]
+    },
+    {
+      "concept_id": "algo.dp",
+      "prerequisites": ["concept.recursion", "concept.complexity.big-o"]
+    },
+    {
+      "concept_id": "algo.binary-search-on-answer",
+      "prerequisites": ["algo.binary-search.basic", "concept.monotonic-predicate"]
+    }
+  ]
+}

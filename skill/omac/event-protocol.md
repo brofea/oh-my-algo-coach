@@ -46,3 +46,10 @@ draft → active ↔ paused → evaluating → closed
 - Contest: Problem Selection / Time Usage / Direction Switching / Implementation / Debugging / Risk Management
 - Diagnose: Evidence Sufficiency / Alternative Explanations / Confidence / Student Confirmation
 - Explore: New Observation / Candidate Target / Knowledge Gain / Follow-up Value
+
+## 6. V2 补充：Learn 教学路径与 Review
+
+- Learn Event 采用 Top-down First 路径：why → concrete-problem → core-intuition → example → visualization/simulation → abstraction → formal-algorithm → correctness → implementation → complexity → recognition → variants → transfer（`learn path add`）。
+- Review 是 Learn/Practice 内的场景：形态 recall / small-variation / different-statement / combined-technique / novel-transfer（`review add`）。
+- Retention 由 Runtime 确定性调度（指数退避窗口），`retention recall` 更新 recall_strength 与下次复习时间。
+- "当时听懂"与"后来仍会"通过 immediate（teach-back/首次 recall）与 delayed（后续间隔 recall）结果对区分（`retention gaps` / `pairs`）。

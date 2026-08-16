@@ -1,0 +1,12 @@
+{
+  "pattern_id": "pattern.distinct-elements-in-range",
+  "name": "Distinct Elements in Range",
+  "observation": ["counting distinct elements over ranges", "repeated contributions must be avoided"],
+  "transformation": ["consider the last occurrence position of each element", "process queries offline sorted by right endpoint"],
+  "pattern": "offline processing + point update + prefix query",
+  "candidate_techniques": ["algo.data-structure.bit", "algo.data-structure.segment-tree"],
+  "related_targets": ["algo.data-structure.bit"],
+  "example_problems": ["cf:246E"],
+  "version": "1.0.0",
+  "source": "omac-created"
+}

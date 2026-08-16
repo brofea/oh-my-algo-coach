@@ -31,6 +31,18 @@ import {
   cmdViewProblemSolving,
   cmdViewMisconception,
   cmdTransferSummary,
+  cmdPackInstall,
+  cmdPackList,
+  cmdPackPrereq,
+  cmdLearnPath,
+  cmdLearnPathList,
+  cmdRetentionList,
+  cmdRetentionSchedule,
+  cmdRetentionRecall,
+  cmdRetentionGaps,
+  cmdRetentionPairs,
+  cmdReviewAdd,
+  cmdCurriculum,
 } from "./commands/commands.js";
 import { OmacError } from "./core/ids.js";
 
@@ -163,6 +175,33 @@ export async function main(argv: string[]): Promise<void> {
         "problem-solving": cmdViewProblemSolving,
         misconception: cmdViewMisconception,
       }, ctx);
+      break;
+    case "pack":
+      result = runSub(command[1], { install: cmdPackInstall, list: cmdPackList, prereq: cmdPackPrereq }, ctx);
+      break;
+    case "learn":
+      if (command[1] === "path" && command[2] === "add") {
+        result = cmdLearnPath(ctx);
+      } else if (command[1] === "path" && command[2] === "list") {
+        result = cmdLearnPathList(ctx);
+      } else {
+        throw new OmacError("unknown_command", `unknown learn subcommand; expected 'path add' or 'path list'`);
+      }
+      break;
+    case "retention":
+      result = runSub(command[1], {
+        list: cmdRetentionList,
+        schedule: cmdRetentionSchedule,
+        recall: cmdRetentionRecall,
+        gaps: cmdRetentionGaps,
+        pairs: cmdRetentionPairs,
+      }, ctx);
+      break;
+    case "review":
+      result = runSub(command[1], { add: cmdReviewAdd }, ctx);
+      break;
+    case "curriculum":
+      result = cmdCurriculum(ctx);
       break;
     case "doctor":
       result = cmdDoctor(ctx);

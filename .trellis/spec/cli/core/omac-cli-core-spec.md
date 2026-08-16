@@ -92,3 +92,24 @@ omac event append ... --mode <mode> [--mode-requested-by learner|coach]   # 记�
 | `invalid hint level` | hint-level 非 L0-L7 |
 | `invalid transfer result` | result 非 4 值 |
 | `subflow_not_found` | subflow 不存在 |
+
+## 9. V2 追加（Learner Memory & Curriculum）
+
+### 新命令
+
+```
+omac pack install <dir> | list | prereq <concept>
+omac learn path add --event-id <id> --path <steps> | list
+omac retention list [--due-only] | schedule <concept> | recall <concept> --result success|partial|fail [--form] [--event-id]
+omac retention gaps [--min-delay-days <n>] | pairs
+omac review add --event-id <id> --concept <c> --form <f> --result <r>
+omac curriculum
+```
+
+### 契约
+
+- Retention 存储 `learner/state/retention.jsonl`；learn path `learner/state/learn-paths.jsonl`。
+- 调度窗口 [1,3,7,14,30,60] 天 × (0.5+strength) 修正；fail 后窗口重置 1 天；strength: +0.25/成功, -0.15/partial, -0.4/fail。
+- Review forms: recall | small-variation | different-statement | combined-technique | novel-transfer；`review add` 同时写 retention 与 event evidence。
+- Learn path steps 限制为 Top-down First 枚举（why→…→transfer）。
+- gaps 默认要求延迟 ≥1 天；curriculum 优先级：review(≤40) < practice(50/65) < learn(80) < recognition(70/90)，低优先数值更紧急。

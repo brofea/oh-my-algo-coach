@@ -45,6 +45,17 @@ import { appendSubflow, listSubflows } from "../store/subflow_store.js";
 import { algorithmAbilityView, problemSolvingView, misconceptionView, transferProbeSummary } from "../services/coaching_views.js";
 import { recordTransferProbe } from "../store/event_store.js";
 import { TransferProbe, ProblemManifestEntry } from "../core/types.js";
+import {
+  listRetention,
+  getRetention,
+  applyRecall,
+  dueRetention,
+  retentionGaps,
+  retentionPairs,
+  curriculumCandidates,
+  REVIEW_FORMS,
+} from "../services/retention.js";
+import { recordLearnPath, validateLearnPathSteps, listLearnPaths, installPack, installedPacks, prereqOf } from "../services/memory.js";
 
 export function cmdInit(ctx: CommandContext): unknown {
   const opts = {
@@ -656,4 +667,163 @@ export function cmdViewMisconception(ctx: CommandContext): unknown {
 
 export function cmdTransferSummary(ctx: CommandContext): unknown {
   return { ok: true, summary: transferProbeSummary(ctx.cwd, flag(ctx.args.flags, "event-id")) };
+}
+
+export function cmdPackInstall(ctx: CommandContext): unknown {
+  const src = flag(ctx.args.flags, "source") ?? ctx.args.command[2];
+  if (!src) throw new OmacError("missing_flag", "pack install requires --source <dir>");
+  if (!existsSync(src)) throw new OmacError("file_not_found", `pack dir not found: ${src}`);
+  const manifest = installPack(ctx.cwd, src);
+  return { ok: true, installed: manifest.pack_id, version: manifest.pack_version, kind: manifest.kind };
+}
+
+export function cmdPackList(ctx: CommandContext): unknown {
+  return {
+    ok: true,
+    packs: installedPacks(ctx.cwd).map((p) => ({
+      pack_id: p.manifest.pack_id,
+      pack_version: p.manifest.pack_version,
+      name: p.manifest.name,
+      kind: p.manifest.kind,
+      license: p.manifest.license,
+    })),
+  };
+}
+
+export function cmdPackPrereq(ctx: CommandContext): unknown {
+  const concept = ctx.args.command[2] ?? flag(ctx.args.flags, "concept");
+  if (!concept) throw new OmacError("missing_flag", "pack prereq requires <concept>");
+  return { ok: true, concept, prerequisites: prereqOf(ctx.cwd, concept) };
+}
+
+export function cmdLearnPath(ctx: CommandContext): unknown {
+  const eventId = flag(ctx.args.flags, "event-id");
+  const stepsRaw = flag(ctx.args.flags, "path");
+  if (!eventId) throw new OmacError("missing_flag", "learn path add requires --event-id");
+  if (!stepsRaw) throw new OmacError("missing_flag", "learn path add requires --path (comma-separated steps)");
+  const steps = stepsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+  validateLearnPathSteps(steps);
+  const record = recordLearnPath(ctx.cwd, eventId, steps);
+  return { ok: true, learn_path: record };
+}
+
+export function cmdLearnPathList(ctx: CommandContext): unknown {
+  return { ok: true, learn_paths: listLearnPaths(ctx.cwd, flag(ctx.args.flags, "event-id")) };
+}
+
+export function cmdRetentionList(ctx: CommandContext): unknown {
+  const dueOnly = flagBool(ctx.args.flags, "due-only");
+  const all = listRetention(ctx.cwd);
+  const rows = dueOnly ? dueRetention(ctx.cwd) : all;
+  return {
+    ok: true,
+    retention: rows.map((r) => ({
+      concept_id: r.concept_id,
+      recall_strength: r.recall_strength,
+      review_count: r.review_count,
+      next_review_at: r.next_review_at,
+      window_days: r.recommended_review_window_days,
+    })),
+  };
+}
+
+export function cmdRetentionSchedule(ctx: CommandContext): unknown {
+  const concept = ctx.args.command[2] ?? flag(ctx.args.flags, "concept");
+  if (!concept) throw new OmacError("missing_flag", "retention schedule requires <concept>");
+  const r = getRetention(ctx.cwd, concept);
+  if (!r) throw new OmacError("not_found", `no retention record for '${concept}'`);
+  return {
+    ok: true,
+    concept_id: concept,
+    recall_strength: r.recall_strength,
+    retention_estimate: r.retention_estimate,
+    review_count: r.review_count,
+    last_reviewed: r.last_reviewed,
+    last_successful_recall: r.last_successful_recall,
+    recommended_review_window_days: r.recommended_review_window_days,
+    next_review_at: r.next_review_at,
+    history: r.reviews.map((v) => ({ form: v.form, result: v.result, reviewed_at: v.reviewed_at })),
+  };
+}
+
+export function cmdRetentionRecall(ctx: CommandContext): unknown {
+  const concept = ctx.args.command[2] ?? flag(ctx.args.flags, "concept");
+  const result = flag(ctx.args.flags, "result");
+  if (!concept) throw new OmacError("missing_flag", "retention recall requires <concept>");
+  if (!result || !["success", "partial", "fail"].includes(result)) {
+    throw new OmacError("validation_error", "recall --result must be success|partial|fail");
+  }
+  const form = flag(ctx.args.flags, "form");
+  if (form && !REVIEW_FORMS.includes(form as never)) {
+    throw new OmacError("validation_error", `form must be one of ${REVIEW_FORMS.join(", ")}`);
+  }
+  const ws = requireWorkspace(ctx.cwd);
+  const eventId = flag(ctx.args.flags, "event-id");
+  if (eventId) {
+    loadEventAnywhere(ws.omac, eventId);
+  }
+  const record = applyRecall(ctx.cwd, concept, result as "success" | "partial" | "fail", { eventId, form: form as never });
+  return {
+    ok: true,
+    concept_id: concept,
+    result,
+    recall_strength: record.recall_strength,
+    next_review_at: record.next_review_at,
+    window_days: record.recommended_review_window_days,
+  };
+}
+
+export function cmdRetentionGaps(ctx: CommandContext): unknown {
+  const minDelay = flag(ctx.args.flags, "min-delay-days") ? Number(flag(ctx.args.flags, "min-delay-days")) : 1;
+  return { ok: true, gaps: retentionGaps(ctx.cwd, { minDelayDays: minDelay }) };
+}
+
+export function cmdRetentionPairs(ctx: CommandContext): unknown {
+  return { ok: true, pairs: retentionPairs(ctx.cwd) };
+}
+
+export function cmdReviewAdd(ctx: CommandContext): unknown {
+  const eventId = flag(ctx.args.flags, "event-id");
+  const concept = flag(ctx.args.flags, "concept");
+  const form = flag(ctx.args.flags, "form") ?? "recall";
+  const result = flag(ctx.args.flags, "result") ?? "success";
+  if (!eventId) throw new OmacError("missing_flag", "review add requires --event-id");
+  if (!concept) throw new OmacError("missing_flag", "review add requires --concept");
+  if (!REVIEW_FORMS.includes(form as never)) {
+    throw new OmacError("validation_error", `form must be one of ${REVIEW_FORMS.join(", ")}`);
+  }
+  if (!["success", "partial", "fail"].includes(result)) {
+    throw new OmacError("validation_error", "result must be success|partial|fail");
+  }
+  const ws = requireWorkspace(ctx.cwd);
+  const { event, archived } = loadEventAnywhere(ws.omac, eventId);
+  if (archived) throw new OmacError("invalid_state", "cannot add review to archived event");
+  const record = applyRecall(ctx.cwd, concept, result as "success" | "partial" | "fail", { eventId, form: form as never });
+  const latest = record.reviews[record.reviews.length - 1];
+  appendEvidence(ctx.cwd, {
+    evidence_type: "observation",
+    event_id: eventId,
+    workspace_id: event.workspace_id,
+    learner_id: event.learner_id,
+    actor: "runtime",
+    observed_at: latest.reviewed_at,
+    target_ids: [concept],
+    content_summary: `review: ${concept} form=${form} result=${result}`,
+    provenance: "cli",
+    evidence_quality: "medium",
+    operation_id: `op-review-${eventId}-${concept}-${latest.review_id}`,
+    extra: { review: { review_id: latest.review_id, concept_id: concept, form, result, reviewed_at: latest.reviewed_at } },
+  });
+  return { ok: true, review: latest, recall_strength: record.recall_strength, next_review_at: record.next_review_at };
+}
+
+export function cmdCurriculum(ctx: CommandContext): unknown {
+  let view: { abilities?: Record<string, { status?: string }> } = {};
+  try {
+    const v = getView(ctx.cwd, readWorkspaceConfig(ctx.cwd).learner_id ?? "");
+    view = v;
+  } catch {
+    view = {};
+  }
+  return { ok: true, candidates: curriculumCandidates(ctx.cwd, view) };
 }
