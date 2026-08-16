@@ -57,6 +57,16 @@ import {
   cmdContestLinkUpsolve,
   cmdContestFollowups,
   cmdViewContest,
+  cmdRating,
+  cmdCalibration,
+  cmdRetentionModelStatus,
+  cmdCoachEval,
+  cmdCoachPolicy,
+  cmdCoachGainMatrix,
+  cmdVisualize,
+  cmdPlan,
+  cmdPackUpdate,
+  cmdPackVersions,
 } from "./commands/commands.js";
 import { OmacError } from "./core/ids.js";
 
@@ -200,7 +210,13 @@ export async function main(argv: string[]): Promise<void> {
       }, ctx);
       break;
     case "pack":
-      result = runSub(command[1], { install: cmdPackInstall, list: cmdPackList, prereq: cmdPackPrereq }, ctx);
+      if (command[1] === "update") {
+        result = cmdPackUpdate(ctx);
+      } else if (command[1] === "versions") {
+        result = cmdPackVersions(ctx);
+      } else {
+        result = runSub(command[1], { install: cmdPackInstall, list: cmdPackList, prereq: cmdPackPrereq }, ctx);
+      }
       break;
     case "learn":
       if (command[1] === "path" && command[2] === "add") {
@@ -218,6 +234,7 @@ export async function main(argv: string[]): Promise<void> {
         recall: cmdRetentionRecall,
         gaps: cmdRetentionGaps,
         pairs: cmdRetentionPairs,
+        "model-status": cmdRetentionModelStatus,
       }, ctx);
       break;
     case "review":
@@ -253,6 +270,21 @@ export async function main(argv: string[]): Promise<void> {
         "link-upsolve": cmdContestLinkUpsolve,
         followups: cmdContestFollowups,
       }, ctx);
+      break;
+    case "rating":
+      result = cmdRating(ctx);
+      break;
+    case "calibration":
+      result = cmdCalibration(ctx);
+      break;
+    case "coach":
+      result = runSub(command[1], { eval: cmdCoachEval, policy: cmdCoachPolicy, "gain-matrix": cmdCoachGainMatrix }, ctx);
+      break;
+    case "visualize":
+      result = cmdVisualize(ctx);
+      break;
+    case "plan":
+      result = cmdPlan(ctx);
       break;
     case "doctor":
       result = cmdDoctor(ctx);

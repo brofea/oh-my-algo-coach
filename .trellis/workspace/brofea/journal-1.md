@@ -137,3 +137,36 @@ V3: connector manifests, provenance cache, editorial degradation, problem status
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: V4 Contest Domain Pack
+
+**Date**: 2026-08-16
+**Task**: V4 Contest Domain Pack
+**Branch**: `main`
+
+### Summary
+
+V4: contest artifact import+integrity, timeline, 6-way loss attribution, contest ability view, upsolve links, followups. 42/42 tests
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `14d49cc3673fcf7f4ee43003d83eb9a1e7e0110c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
+- **Total Sessions**: 5
 - **Last Active**: 2026-08-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~139 | Active |
+| `journal-1.md` | ~172 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-08-16 | V4 Contest Domain Pack | `14d49cc3673fcf7f4ee43003d83eb9a1e7e0110c` | `main` |
 | 4 | 2026-08-16 | V3 External Problem Ecosystem & Recommendation | `23f7d67a12e7e8b63693d2f814d334c414fa0d40` | `main` |
 | 3 | 2026-08-16 | V2 Learner Memory & Curriculum | `97c9bc655830c61a4a224bdc4abd1ab463674f3a` | `main` |
 | 2 | 2026-08-16 | V1 Coaching Effectiveness | `532eee988ac279aec559f954934343f202545d12` | `main` |

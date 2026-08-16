@@ -59,6 +59,7 @@ import { recordLearnPath, validateLearnPathSteps, listLearnPaths, installPack, i
 import { listConnectors, getConnector, fetchProblem, fetchEditorial, cachedContent, clearConnectorCache, setProblemStatus, problemStatuses } from "../services/ecosystem.js";
 import { recommendProblems, explainRecommendation } from "../services/recommend.js";
 import { importContestArtifact, findContestIdForEvent, contestTimeline, analyzeContest, recordContestAnalysis, contestAbilityView, linkUpsolve, contestFollowups } from "../services/contest.js";
+import { computeRating, computeCalibration, advancedRetentionStatus, coachEval, coachPolicy, gainMatrix, visualize, longTermPlan, packVersions, updatePack } from "../services/adaptive.js";
 
 export function cmdInit(ctx: CommandContext): unknown {
   const opts = {
@@ -986,4 +987,74 @@ export function cmdContestFollowups(ctx: CommandContext): unknown {
 
 export function cmdViewContest(ctx: CommandContext): unknown {
   return { ok: true, view: contestAbilityView(ctx.cwd) };
+}
+
+export function cmdRating(ctx: CommandContext): unknown {
+  return { ok: true, rating: computeRating(ctx.cwd, flag(ctx.args.flags, "learner-id")) };
+}
+
+export function cmdCalibration(ctx: CommandContext): unknown {
+  return { ok: true, calibration: computeCalibration(ctx.cwd) };
+}
+
+export function cmdRetentionModelStatus(ctx: CommandContext): unknown {
+  const concept = ctx.args.command[2] ?? flag(ctx.args.flags, "concept");
+  if (!concept) throw new OmacError("missing_flag", "retention model-status requires <concept>");
+  const r = getRetention(ctx.cwd, concept);
+  if (!r) throw new OmacError("not_found", `no retention for '${concept}'`);
+  const advanced = advancedRetentionStatus({ ...r });
+  return {
+    ok: true,
+    concept_id: concept,
+    model: "exp-backoff-with-overdue-decay",
+    recall_strength: advanced.recall_strength,
+    retention_estimate: advanced.retention_estimate,
+    next_review_at: advanced.next_review_at,
+    overdue_decay_note: advanced.next_review_at && advanced.next_review_at < new Date().toISOString() ? "overdue: estimate decayed" : "not overdue",
+  };
+}
+
+export function cmdCoachEval(ctx: CommandContext): unknown {
+  const target = flag(ctx.args.flags, "target");
+  if (!target) throw new OmacError("missing_flag", "coach eval requires --target");
+  const result = coachEval(ctx.cwd, target, { minEvents: flag(ctx.args.flags, "min-events") ? Number(flag(ctx.args.flags, "min-events")) : undefined });
+  return { ok: true, ...result };
+}
+
+export function cmdCoachPolicy(ctx: CommandContext): unknown {
+  const result = coachPolicy(ctx.cwd, { minSamples: flag(ctx.args.flags, "min-samples") ? Number(flag(ctx.args.flags, "min-samples")) : undefined });
+  return { ok: true, ...result };
+}
+
+export function cmdCoachGainMatrix(ctx: CommandContext): unknown {
+  return { ok: true, ...gainMatrix(ctx.cwd) };
+}
+
+export function cmdVisualize(ctx: CommandContext): unknown {
+  const kind = flag(ctx.args.flags, "kind") ?? "ascii";
+  const view = flag(ctx.args.flags, "view") ?? "algorithm";
+  if (!["chart", "graph", "ascii"].includes(kind)) throw new OmacError("validation_error", "--kind must be chart|graph|ascii");
+  if (!["algorithm", "problem-solving", "retention", "rating"].includes(view)) throw new OmacError("validation_error", "--view must be algorithm|problem-solving|retention|rating");
+  const result = visualize(ctx.cwd, { kind: kind as "chart" | "graph" | "ascii", view: view as never, concept: flag(ctx.args.flags, "concept") });
+  return { ok: true, visualization: result };
+}
+
+export function cmdPlan(ctx: CommandContext): unknown {
+  const horizon = flag(ctx.args.flags, "horizon") ? Number(flag(ctx.args.flags, "horizon")) : 4;
+  const targets = (flag(ctx.args.flags, "targets") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const result = longTermPlan(ctx.cwd, { horizonWeeks: horizon, targets });
+  return { ok: true, ...result };
+}
+
+export function cmdPackUpdate(ctx: CommandContext): unknown {
+  const packId = ctx.args.command[2] ?? flag(ctx.args.flags, "pack-id");
+  if (!packId) throw new OmacError("missing_flag", "pack update requires <pack-id>");
+  const result = updatePack(ctx.cwd, packId, { source: flag(ctx.args.flags, "source"), apply: flagBool(ctx.args.flags, "apply") });
+  return { ok: true, ...result };
+}
+
+export function cmdPackVersions(ctx: CommandContext): unknown {
+  const packId = ctx.args.command[2] ?? flag(ctx.args.flags, "pack-id");
+  if (!packId) throw new OmacError("missing_flag", "pack versions requires <pack-id>");
+  return { ok: true, ...packVersions(ctx.cwd, packId) };
 }

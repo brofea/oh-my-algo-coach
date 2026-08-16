@@ -155,3 +155,30 @@ omac view contest
 - 损失归因（确定性）：never-opened→algorithm-gap；opened 15–45min 无有效提交→recognition-gap；≥45min→switch-late；≥4 次提交且 debug>thinking→debug-slow；≥2 次提交→implementation-slow（高 rating>+200→risk-management）；AC 且 ≤1 提交→无重大损失。
 - `contest analyze` 写 analysis 记录（contest view 聚合）。
 - 硬约束：Contest 纯赛后；live 请求拒绝；无 Contest Lock / 反作弊（D-011）。
+
+## 12. V5 追加（Adaptive Coaching Research & Ecosystem）
+
+### 新命令
+
+```
+omac rating [--learner-id]
+omac calibration
+omac retention model-status <concept>
+omac coach eval --target <skill> [--min-events n]
+omac coach policy [--min-samples n]
+omac coach gain-matrix
+omac visualize --kind chart|graph|ascii --view algorithm|problem-solving|retention|rating [--concept <id>]
+omac plan --horizon <weeks> [--targets a,b]
+omac pack update <pack-id> [--source <dir>] [--apply]
+omac pack versions <pack-id>
+```
+
+### 契约
+
+- Rating：display-layer（estimate 区间中点 × confidence×evidence 加权）；note 声明非底层模型。
+- Calibration：按 problem-ref 字母分箱的 observed rate + Brier；标注 heuristic。
+- Retention 高级模型：指数退避 + overdue 衰减（estimate × exp(-0.05×overdue_days)）。
+- Coach eval：intervention_type → observed_count / gain_sign（按前后 claim 状态）/ insufficient（样本 < min）。
+- gain-matrix：Student × Problem Type × Difficulty × Intervention 聚合，方向来自关联 claim 变化。
+- Visualize：Runtime 服务输出 {kind,title,body}（ASCII），Skill 不放 Script。
+- Pack 版本治理：update 默认 dry-run（upgrade-available），--apply 才删除旧目录并重装，.versions.jsonl 审计（含 from/to）。

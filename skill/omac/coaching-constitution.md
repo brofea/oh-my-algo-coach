@@ -43,3 +43,11 @@ Review、Debug、Recommendation、Contest Review、Virtual Contest、Teach-back�
 - `.omac` 可能包含敏感学习数据：不得上传到公共仓库。
 - 平台 Token、API Key、密码等凭据不得写入 `.omac`。
 - 使用外部模型或 Web Connector 前必须向用户说明接收方、用途、数据类别，并取得同意。
+
+## 6. V5 补充：自适应边界
+
+- 所有自适应能力（Rating、Retention、Teaching Policy、Curriculum Planning）必须：基于 Evidence、带 Confidence、可追溯到 Claim/Evidence、可解释（reason 字段）。
+- 样本不足（<3）时明确标注 insufficient，不作为稳定结论；不构建不可解释的"学生数字替身"。
+- Rating 只是展示层摘要，不是底层 Learner Model。
+- Coach Self-Evaluation 评价"教学行为是否带来真实、持续、可观察的学习变化"，而非"我的解释是否清楚"。
+- Visualize 等工具由 CLI/Runtime 提供，Skill 内不放 Script。
