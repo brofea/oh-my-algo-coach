@@ -1,0 +1,7 @@
+{"file":".trellis/spec/cli/core/index.md","reason":"CLI core spec index and implementation quality checklist"}
+{"file":".trellis/spec/cli/core/omac-cli-core-spec.md","reason":"V0-V5 command, storage, error and replay contracts incl. §13 V5.1 gates"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Required cross-layer data-flow and contract analysis (Skill -> Runtime -> .omac state)"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Reuse existing validators, loaders, stores and service boundaries"}
+{"file":".trellis/tasks/08-16-fix-acceptance-blockers/info.md","reason":"Task-specific technical design, schemas, sequencing and test matrix"}
+{"file":".trellis/tasks/08-16-fix-acceptance-blockers/research/implementation-audit.md","reason":"Baseline repository audit with verified gaps"}
+{"file":".trellis/tasks/08-16-fix-acceptance-blockers/research/acceptance-matrix.md","reason":"Previous round acceptance matrix to update with fixes"}
