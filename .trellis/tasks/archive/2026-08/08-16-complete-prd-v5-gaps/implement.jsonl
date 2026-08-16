@@ -1,0 +1,6 @@
+{"file":".trellis/spec/cli/core/index.md","reason":"CLI core spec index and implementation quality checklist"}
+{"file":".trellis/spec/cli/core/omac-cli-core-spec.md","reason":"V0-V5 command, storage, error and replay contracts"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Required cross-layer data-flow and contract analysis"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Reuse existing validators, loaders, stores and service boundaries"}
+{"file":".trellis/tasks/08-16-complete-prd-v5-gaps/info.md","reason":"Task-specific technical design, schemas, sequencing and test matrix"}
+{"file":".trellis/tasks/08-16-complete-prd-v5-gaps/research/implementation-audit.md","reason":"Verified repository baseline and reproduction expectations"}

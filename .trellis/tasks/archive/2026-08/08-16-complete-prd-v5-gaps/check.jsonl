@@ -1,0 +1,6 @@
+{"file":".trellis/spec/cli/core/index.md","reason":"Quality gate and package spec entry points"}
+{"file":".trellis/spec/cli/core/omac-cli-core-spec.md","reason":"Acceptance contracts for CLI, persistence, replay and V0-V5"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify Skill to Runtime to .omac state data flow"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check for duplicate validation and parallel data paths"}
+{"file":".trellis/tasks/08-16-complete-prd-v5-gaps/info.md","reason":"Expected technical contracts and regression matrix"}
+{"file":".trellis/tasks/08-16-complete-prd-v5-gaps/research/implementation-audit.md","reason":"Baseline findings to revalidate after implementation"}
