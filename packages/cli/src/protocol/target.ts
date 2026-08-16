@@ -54,6 +54,40 @@ const BUILTIN_TARGETS: TargetContract[] = [
     evaluation_rubric: { levels: ["unknown", "observed", "assisted", "independent"] },
     assessment_scale: "levels",
   },
+  {
+    target_id: "algo.dp",
+    target_version: "1.0.0",
+    name: "Dynamic Programming",
+    category: "algorithm",
+    prerequisites: ["concept.recursion", "concept.complexity.big-o"],
+    observable_behaviors: [
+      "defines state and transition for a problem",
+      "argues optimal substructure",
+      "implements the recurrence without help",
+    ],
+    success_criteria: [
+      "learner defines a correct state and transition",
+      "learner argues optimal substructure",
+      "learner implements the recurrence without help",
+    ],
+    failure_taxonomy: ["state-stores-too-much", "transition-direction-confusion"],
+    required_evidence: ["observation.transition-derivation", "submission.verdict"],
+    evaluation_rubric: { levels: ["unknown", "observed", "assisted", "independent", "transferred"] },
+    assessment_scale: "levels",
+  },
+  {
+    target_id: "algo.greedy",
+    target_version: "1.0.0",
+    name: "Greedy",
+    category: "algorithm",
+    prerequisites: ["concept.sorting", "concept.proof.induction"],
+    observable_behaviors: ["forms exchange argument", "identifies local choice", "validates with counterexample"],
+    success_criteria: ["learner proposes a greedy choice", "learner validates or rejects with counterexample"],
+    failure_taxonomy: ["local-optimum-implies-global"],
+    required_evidence: ["observation.hypothesis", "observation.counterexample"],
+    evaluation_rubric: { levels: ["unknown", "observed", "assisted", "independent"] },
+    assessment_scale: "levels",
+  },
 ];
 
 export function listTargets(cwd: string): TargetContract[] {

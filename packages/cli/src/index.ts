@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { parseArgs, outputError, outputJson, Command } from "./core/cli.js";
+import { parseArgs, outputError, outputJson, Command, flag } from "./core/cli.js";
 import {
   cmdInit,
   cmdLearnerClaimSubmit,
@@ -43,6 +43,14 @@ import {
   cmdRetentionPairs,
   cmdReviewAdd,
   cmdCurriculum,
+  cmdConnectorList,
+  cmdConnectorInspect,
+  cmdEditorialGet,
+  cmdEditorialCacheClear,
+  cmdProblemStatus,
+  cmdProblemStatusList,
+  cmdRecommend,
+  cmdRecommendExplain,
 } from "./commands/commands.js";
 import { OmacError } from "./core/ids.js";
 
@@ -158,7 +166,15 @@ export async function main(argv: string[]): Promise<void> {
       result = cmdTargets(ctx);
       break;
     case "problem":
-      result = runSub(command[1], { add: cmdProblemAdd, list: cmdProblemList }, ctx);
+      if (command[1] === "add") {
+        result = cmdProblemAdd(ctx);
+      } else if (command[1] === "list") {
+        result = cmdProblemList(ctx);
+      } else if (command[1] === "status") {
+        result = command[2] === "list" ? cmdProblemStatusList(ctx) : cmdProblemStatus(ctx);
+      } else {
+        throw new OmacError("unknown_command", "expected 'problem add|list|status'");
+      }
       break;
     case "artifact":
       result = runSub(command[1], { add: cmdArtifactAdd, list: cmdArtifactList }, ctx);
@@ -202,6 +218,25 @@ export async function main(argv: string[]): Promise<void> {
       break;
     case "curriculum":
       result = cmdCurriculum(ctx);
+      break;
+    case "connector":
+      result = runSub(command[1], { list: cmdConnectorList, inspect: cmdConnectorInspect }, ctx);
+      break;
+    case "editorial":
+      if (command[1] === "get") {
+        result = cmdEditorialGet(ctx);
+      } else if (command[1] === "cache" && command[2] === "clear") {
+        result = cmdEditorialCacheClear(ctx);
+      } else {
+        throw new OmacError("unknown_command", "expected 'editorial get <ref>' or 'editorial cache clear <connector>'");
+      }
+      break;
+    case "recommend":
+      if (ctx.args.flags.has("explain")) {
+        result = cmdRecommendExplain(ctx);
+      } else {
+        result = cmdRecommend(ctx);
+      }
       break;
     case "doctor":
       result = cmdDoctor(ctx);

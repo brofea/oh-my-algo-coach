@@ -168,6 +168,60 @@ export interface CoachingModeChange {
   evidence_id?: string;
 }
 
+export interface ConnectorCapabilityManifest {
+  connector_id: string;
+  platform: string;
+  version: string;
+  capabilities: {
+    fetch_problem: boolean;
+    fetch_editorial: boolean;
+    list_contest_problems: boolean;
+    rate_limit_per_minute?: number;
+    web: boolean;
+  };
+  source?: string;
+  license?: string;
+}
+
+export interface ExternalContentRecord {
+  content_id: string;
+  ref: string;
+  connector_id: string;
+  kind: "problem" | "editorial" | "contest";
+  source_url?: string;
+  source_type: string;
+  retrieved_at: string;
+  content_license?: string;
+  usage_policy?: string;
+  contest_status?: string;
+  cache_version: string;
+  verified: boolean;
+  verification_note?: string;
+  data: unknown;
+}
+
+export interface ProblemStatusRecord {
+  problem_ref: string;
+  status: "solved" | "attempted" | "untouched";
+  independence_status?: string;
+  solved_at?: string;
+  event_id?: string;
+  evidence_ids: string[];
+  updated_at: string;
+}
+
+export interface RecommendationCandidate {
+  problem_ref: string;
+  platform?: string;
+  difficulty?: string;
+  rating?: number;
+  target_id: string;
+  reason: string;
+  mode: "exploitation" | "exploration";
+  score: number;
+  novelty: boolean;
+}
+
 export interface IndependenceResult {
   independence_status: IndependenceStatus;
   first_intervention_at?: string;

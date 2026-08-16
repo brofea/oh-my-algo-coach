@@ -8,6 +8,7 @@ import { loadEventAnywhere, listEvents } from "../store/event_store.js";
 import { listEvidence } from "../store/evidence_store.js";
 import { listClaims } from "../store/claim_store.js";
 import { assertSchemaVersion } from "../core/schema.js";
+import { listConnectors, cachedContent } from "./ecosystem.js";
 
 export interface IntegrityIssue {
   severity: "error" | "warning";
@@ -88,7 +89,7 @@ export function integrityCheck(cwd: string): IntegrityReport {
   return { ok: issues.every((i) => i.severity !== "error"), issues };
 }
 
-export function doctor(cwd: string): { integrity: IntegrityReport; warnings: string[]; tips: string[] } {
+export function doctor(cwd: string): { integrity: IntegrityReport; warnings: string[]; tips: string[]; connectors?: unknown[] } {
   const report = integrityCheck(cwd);
   const warnings = [WARNING_TEXT];
   const tips: string[] = [];
@@ -100,8 +101,21 @@ export function doctor(cwd: string): { integrity: IntegrityReport; warnings: str
       warnings.push("WARNING: credentials detected in workspace config — remove them; credentials must never be stored in .omac");
     }
   }
+  const connectors = checkConnectors(cwd);
   if (report.ok) tips.push("integrity: ok — run 'omac export --learner-id <id>' to back up learner data");
   else tips.push("integrity: issues found — see report above");
-  void readdirSync;
-  return { integrity: report, warnings, tips };
+  return { integrity: report, warnings, tips, connectors };
+}
+
+function checkConnectors(cwd: string): { connector_id: string; platform: string; cached_entries: number; verified_entries: number; healthy: boolean }[] {
+  return listConnectors().map((c) => {
+    const cache = cachedContent(cwd, c.connector_id);
+    return {
+      connector_id: c.connector_id,
+      platform: c.platform,
+      cached_entries: cache.length,
+      verified_entries: cache.filter((x) => x.verified).length,
+      healthy: true,
+    };
+  });
 }

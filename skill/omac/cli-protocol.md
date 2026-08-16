@@ -50,3 +50,10 @@
 3. Runtime 返回原结果（幂等）
 4. 若错误为确定性校验错误（validation_error 等），修正参数后重试
 ```
+
+## 6. V3 补充：外部生态
+
+- Connector 是可替换适配层：`connector list` 查看 Capability Manifest；当前参考实现为 fixture 数据源（web 能力声明为 false），真实网络连接器通过同一 manifest 声明。
+- Editorial 只作为 Coach 知识输入（`editorial get` 返回 verified 状态）；Practice 中 Coach 知道题解 ≠ 学生看到题解。
+- 外部内容必须带来源元数据；无法确认来源标记为未验证，不写入长期 Knowledge Pack。
+- 推荐（`recommend --target <id>`）是可解释的确定性基线；Exclusion（排除已做）、Exploitation/Exploration 分流、离线降级。

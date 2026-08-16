@@ -56,6 +56,8 @@ import {
   REVIEW_FORMS,
 } from "../services/retention.js";
 import { recordLearnPath, validateLearnPathSteps, listLearnPaths, installPack, installedPacks, prereqOf } from "../services/memory.js";
+import { listConnectors, getConnector, fetchProblem, fetchEditorial, cachedContent, clearConnectorCache, setProblemStatus, problemStatuses } from "../services/ecosystem.js";
+import { recommendProblems, explainRecommendation } from "../services/recommend.js";
 
 export function cmdInit(ctx: CommandContext): unknown {
   const opts = {
@@ -472,7 +474,7 @@ export function cmdReport(ctx: CommandContext): unknown {
 
 export function cmdDoctor(ctx: CommandContext): unknown {
   const result = doctor(ctx.cwd);
-  return { ok: true, integrity: result.integrity, warnings: result.warnings, tips: result.tips };
+  return { ok: true, integrity: result.integrity, warnings: result.warnings, tips: result.tips, connectors: result.connectors };
 }
 
 export function cmdIntegrity(ctx: CommandContext): unknown {
@@ -826,4 +828,113 @@ export function cmdCurriculum(ctx: CommandContext): unknown {
     view = {};
   }
   return { ok: true, candidates: curriculumCandidates(ctx.cwd, view) };
+}
+
+export function cmdConnectorList(ctx: CommandContext): unknown {
+  return {
+    ok: true,
+    connectors: listConnectors().map((c) => ({
+      connector_id: c.connector_id,
+      platform: c.platform,
+      version: c.version,
+      capabilities: c.capabilities,
+    })),
+  };
+}
+
+export function cmdConnectorInspect(ctx: CommandContext): unknown {
+  const id = ctx.args.command[2] ?? flag(ctx.args.flags, "connector");
+  if (!id) throw new OmacError("missing_flag", "connector inspect requires <id>");
+  const c = getConnector(id);
+  const cache = cachedContent(ctx.cwd, id);
+  return { ok: true, connector: c, cached_entries: cache.length, verified_entries: cache.filter((x) => x.verified).length };
+}
+
+export function cmdEditorialGet(ctx: CommandContext): unknown {
+  const ref = ctx.args.command[2] ?? flag(ctx.args.flags, "ref");
+  const connector = flag(ctx.args.flags, "connector") ?? "codeforces";
+  if (!ref) throw new OmacError("missing_flag", "editorial get requires <ref>");
+  try {
+    const record = fetchEditorial(ctx.cwd, ref, connector);
+    return {
+      ok: true,
+      editorial: record,
+      degraded: !record.verified,
+      note: record.verification_note,
+    };
+  } catch (e) {
+    if (e instanceof OmacError && e.code === "capability_missing") {
+      return {
+        ok: true,
+        editorial: null,
+        degraded: true,
+        note: `connector '${connector}' cannot fetch editorials — offline degradation`,
+      };
+    }
+    throw e;
+  }
+}
+
+export function cmdEditorialCacheClear(ctx: CommandContext): unknown {
+  const connector = ctx.args.command[3] ?? flag(ctx.args.flags, "connector");
+  if (!connector) throw new OmacError("missing_flag", "editorial cache clear requires <connector>");
+  const result = clearConnectorCache(ctx.cwd, connector);
+  return { ok: true, ...result };
+}
+
+export function cmdProblemStatus(ctx: CommandContext): unknown {
+  const ref = ctx.args.command[2] ?? flag(ctx.args.flags, "problem-ref");
+  const status = flag(ctx.args.flags, "status");
+  if (!ref) throw new OmacError("missing_flag", "problem status requires <ref>");
+  if (!status || !["solved", "attempted", "untouched"].includes(status)) {
+    throw new OmacError("validation_error", "--status must be solved|attempted|untouched");
+  }
+  const independence = flag(ctx.args.flags, "independence");
+  const record = setProblemStatus(ctx.cwd, {
+    problem_ref: ref,
+    status: status as "solved" | "attempted" | "untouched",
+    independence_status: independence,
+    solved_at: status === "solved" ? new Date().toISOString() : undefined,
+    event_id: flag(ctx.args.flags, "event-id"),
+    evidence_ids: (flag(ctx.args.flags, "evidence-ids") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+  });
+  return { ok: true, problem_status: record };
+}
+
+export function cmdProblemStatusList(ctx: CommandContext): unknown {
+  return { ok: true, statuses: problemStatuses(ctx.cwd) };
+}
+
+export function cmdRecommend(ctx: CommandContext): unknown {
+  const targetId = flag(ctx.args.flags, "target");
+  if (!targetId) throw new OmacError("missing_flag", "recommend requires --target <target_id>");
+  const mode = flag(ctx.args.flags, "mode") ?? "auto";
+  if (!["auto", "exploitation", "exploration"].includes(mode)) {
+    throw new OmacError("validation_error", "--mode must be auto|exploitation|exploration");
+  }
+  const limit = flag(ctx.args.flags, "limit") ? Number(flag(ctx.args.flags, "limit")) : 5;
+  let view: { abilities?: Record<string, { status?: string; confidence?: number; evidence_count?: number; estimate?: [number, number] }> } = {};
+  try {
+    const v = getView(ctx.cwd, readWorkspaceConfig(ctx.cwd).learner_id ?? "");
+    view = v;
+  } catch {
+    view = {};
+  }
+  const result = recommendProblems(ctx.cwd, {
+    targetId,
+    mode: mode as "auto" | "exploitation" | "exploration",
+    limit,
+    platform: flag(ctx.args.flags, "platform"),
+    solvedExcluded: !flagBool(ctx.args.flags, "include-solved"),
+    learnerView: view,
+  });
+  return { ok: true, ...result };
+}
+
+export function cmdRecommendExplain(ctx: CommandContext): unknown {
+  const explainVal = flag(ctx.args.flags, "explain");
+  const ref = ctx.args.command[1] ?? (typeof explainVal === "string" && explainVal !== "true" ? explainVal : undefined) ?? flag(ctx.args.flags, "problem-ref");
+  if (!ref) throw new OmacError("missing_flag", "recommend --explain requires <ref>");
+  const explanation = explainRecommendation(ctx.cwd, ref);
+  return { ok: true, explanation };
 }

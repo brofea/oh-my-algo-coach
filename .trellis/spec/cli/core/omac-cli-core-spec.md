@@ -113,3 +113,24 @@ omac curriculum
 - Review forms: recall | small-variation | different-statement | combined-technique | novel-transfer；`review add` 同时写 retention 与 event evidence。
 - Learn path steps 限制为 Top-down First 枚举（why→…→transfer）。
 - gaps 默认要求延迟 ≥1 天；curriculum 优先级：review(≤40) < practice(50/65) < learn(80) < recognition(70/90)，低优先数值更紧急。
+
+## 10. V3 追加（External Problem Ecosystem & Recommendation）
+
+### 新命令
+
+```
+omac connector list | inspect <id>
+omac editorial get <ref> [--connector <id>] | cache clear <connector>
+omac problem status <ref> --status solved|attempted|untouched [--independence] [--event-id] | problem status list
+omac recommend --target <id> [--mode auto|exploitation|exploration] [--limit] [--platform]
+omac recommend --explain <ref>            # 注意: --explain <ref> 中 ref 是 flag 值或 command[1]
+```
+
+### 契约
+
+- Connector registry: codeforces / atcoder（fixture 数据源，capability manifest，web:false）。
+- 外部内容缓存 `.omac/knowledge/external/<connector>/<ref>.json`：source_url/source_type/retrieved_at/content_license/usage_policy/contest_status/cache_version/verified。
+- 未验证来源 verified=false → 不视为长期知识；editorial 缺失或能力缺失 → degraded=true。
+- Problem status 存 `learner/state/problem-status.jsonl`。
+- 推荐：排除 solved/attempted；pool = 本地 manifest + connector 缓存；exploitation 按距离估计区间+coverage+novelty 排序；auto 分流（confidence<0.35 或 evidence<3 → exploration）；确定性输出。
+- doctor 返回 connectors 健康检查数组。

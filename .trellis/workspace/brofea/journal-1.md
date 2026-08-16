@@ -71,3 +71,36 @@ V1: hint ladder L0-L7 + structured interventions, transfer probes, debug/postmor
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: V2 Learner Memory & Curriculum
+
+**Date**: 2026-08-16
+**Task**: V2 Learner Memory & Curriculum
+**Branch**: `main`
+
+### Summary
+
+V2: retention scheduling, review protocol (5 forms), learn paths, pack install/prereq, immediate-vs-delayed gaps, curriculum candidates. 27/27 tests
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `97c9bc655830c61a4a224bdc4abd1ab463674f3a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
