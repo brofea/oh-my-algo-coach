@@ -1,4 +1,4 @@
-import { rmSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { rmSync, readFileSync, existsSync, mkdirSync, writeFileSync, statSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { CommandContext, flag, flagBool, outputJson } from "../core/cli.js";
 import { initWorkspace, setLearnerId, readWorkspaceConfig, WARNING_TEXT, requireWorkspace, omacPath } from "../store/workspace.js";
@@ -10,9 +10,12 @@ import {
   updateEvent,
   archiveEvent,
   listEvents,
+  appendBoundary,
+  getBoundaries,
+  getBoundary,
 } from "../store/event_store.js";
 import { appendClaim, listClaims } from "../store/claim_store.js";
-import { appendEvidence, listEvidence } from "../store/evidence_store.js";
+import { appendEvidence, listEvidence, getEvidence } from "../store/evidence_store.js";
 import { rebuildView, getView } from "../store/view_store.js";
 import {
   validateAssessment,
@@ -25,12 +28,13 @@ import {
   validateStatus,
 } from "../core/schema.js";
 import { appendJsonl, ensureDir, readJsonl, writeJsonl } from "../store/jsonl.js";
+import { artifactsFile } from "../store/knowledge_store.js";
 import { explainWhy } from "../services/explain.js";
 import { eventReport, learnerReport } from "../services/report.js";
 import { doctor, integrityCheck } from "../services/doctor.js";
 import { migrateWorkspace } from "../services/migrate.js";
 import { exportPackage, previewImport, importPackage } from "../services/export_import.js";
-import { listTargets } from "../protocol/target.js";
+import { listTargets, targetProvenance, getTarget, defaultBoundary } from "../protocol/target.js";
 import {
   validateHintLevel,
   validateSubflowKind,
@@ -42,9 +46,9 @@ import {
 } from "../protocol/coaching.js";
 import { addProblem, listProblems, addArtifact, listArtifacts } from "../store/knowledge_store.js";
 import { appendSubflow, listSubflows } from "../store/subflow_store.js";
-import { algorithmAbilityView, problemSolvingView, misconceptionView, transferProbeSummary } from "../services/coaching_views.js";
+import { algorithmAbilityView, problemSolvingView, misconceptionView, transferProbeSummary, transferRateReport } from "../services/coaching_views.js";
 import { recordTransferProbe } from "../store/event_store.js";
-import { TransferProbe, ProblemManifestEntry } from "../core/types.js";
+import { TransferProbe, ProblemManifestEntry, IndependenceBoundary, EvidenceRecord, AssessmentClaim } from "../core/types.js";
 import {
   listRetention,
   getRetention,
@@ -55,8 +59,9 @@ import {
   curriculumCandidates,
   REVIEW_FORMS,
 } from "../services/retention.js";
-import { recordLearnPath, validateLearnPathSteps, listLearnPaths, installPack, installedPacks, prereqOf } from "../services/memory.js";
+import { recordLearnPath, validateLearnPathSteps, listLearnPaths, installPack, installedPacks, prereqOf, listPatternCards, getPatternCard, listMisconceptionCards, getMisconceptionCard, listPedagogyCards, getPedagogyCard, listAlgorithmCards, getAlgorithmCard, manifestLicense } from "../services/memory.js";
 import { listConnectors, getConnector, fetchProblem, fetchEditorial, cachedContent, clearConnectorCache, setProblemStatus, problemStatuses } from "../services/ecosystem.js";
+import { validateArtifact } from "../services/contest.js";
 import { recommendProblems, explainRecommendation } from "../services/recommend.js";
 import { importContestArtifact, findContestIdForEvent, contestTimeline, analyzeContest, recordContestAnalysis, contestAbilityView, linkUpsolve, contestFollowups } from "../services/contest.js";
 import { computeRating, computeCalibration, advancedRetentionStatus, coachEval, coachPolicy, gainMatrix, visualize, longTermPlan, packVersions, updatePack } from "../services/adaptive.js";
@@ -97,6 +102,12 @@ export function cmdLearnerClaimSubmit(ctx: CommandContext): unknown {
   const skillId = flag(ctx.args.flags, "skill-id");
   const targetId = flag(ctx.args.flags, "target-id");
   if (!skillId) throw new OmacError("missing_flag", "learner claim submit requires --skill-id");
+  if (targetId && !event.target_ids.includes(targetId) && !targetId.startsWith("misconception.")) {
+    throw new OmacError(
+      "target_mismatch",
+      `claim target '${targetId}' is not declared on event '${eventId}' (event targets: ${event.target_ids.join(", ") || "none"}); declare it with 'event create --target-ids' or use a misconception scope`
+    );
+  }
   const assessment = flag(ctx.args.flags, "assessment");
   if (!assessment) throw new OmacError("missing_flag", "learner claim submit requires --assessment");
   const confidence = Number(flag(ctx.args.flags, "confidence") ?? "0.5");
@@ -106,6 +117,38 @@ export function cmdLearnerClaimSubmit(ctx: CommandContext): unknown {
     .map((s) => s.trim())
     .filter(Boolean);
   const operationId = flag(ctx.args.flags, "operation-id") ?? `op-${uuid().slice(0, 12)}`;
+  const studentConfirmation = flag(ctx.args.flags, "student-confirmation");
+  if (event.event_type === "diagnose" && studentConfirmation !== "confirmed") {
+    throw new OmacError(
+      "diagnose_confirmation_required",
+      "diagnose claims require student confirmation before they may update Learner State; re-submit with --student-confirmation confirmed"
+    );
+  }
+  for (const eid of evidenceIds) {
+    let evd: EvidenceRecord;
+    try {
+      evd = getEvidence(ctx.cwd, eid);
+    } catch {
+      throw new OmacError("evidence_not_found", `claim references missing evidence '${eid}'; append evidence before submitting claims`);
+    }
+    if (evd.learner_id !== event.learner_id || evd.event_id !== eventId) {
+      throw new OmacError(
+        "evidence_mismatch",
+        `evidence '${eid}' does not belong to learner '${event.learner_id}' / event '${eventId}'`
+      );
+    }
+  }
+  const boundaryId = flag(ctx.args.flags, "boundary-id");
+  const boundarySensitive = assessment === "independent" || assessment === "transferred" || assessment === "retained";
+  if (boundarySensitive && !boundaryId) {
+    throw new OmacError(
+      "boundary_required",
+      `${assessment} claims require an independence boundary snapshot; set one with 'event boundary set --event-id ${eventId} --target-id <id>' and pass --boundary-id <id>`
+    );
+  }
+  if (boundaryId) {
+    getBoundary(ws.omac, eventId, boundaryId);
+  }
   const claim = appendClaim(ctx.cwd, {
     workspace_id: cfg.workspace_id,
     learner_id: event.learner_id,
@@ -119,7 +162,8 @@ export function cmdLearnerClaimSubmit(ctx: CommandContext): unknown {
     evaluation_run_id: flag(ctx.args.flags, "evaluation-run-id") ?? `run-${uuid().slice(0, 12)}`,
     input_snapshot_ref: `event:${eventId}`,
     operation_id: operationId,
-    student_confirmation: (flag(ctx.args.flags, "student-confirmation") as never) ?? "not_required",
+    student_confirmation: studentConfirmation ? (studentConfirmation as AssessmentClaim["student_confirmation"]) : "not_required",
+    independence_boundary_ref: boundaryId,
     unknown_reason: flag(ctx.args.flags, "unknown-reason"),
     supersedes: (flag(ctx.args.flags, "supersedes") ?? "")
       .split(",")
@@ -144,12 +188,14 @@ export function cmdLearnerPurge(ctx: CommandContext): unknown {
   if (!flagBool(ctx.args.flags, "confirm")) {
     throw new OmacError(
       "confirmation_required",
-      "purge is irreversible: it deletes the learner's Profile, Events, Evidence, Claims, Views, Reports and index refs. Re-run with --confirm. Export/backup copies and already-sent external data are NOT deleted."
+      "purge is irreversible: it deletes the learner's Profile, Events, Evidence, Claims, Views, Reports, Artifacts, State, indexes and retention data. Re-run with --confirm. Export/backup copies and already-sent external data are NOT deleted."
     );
   }
   const ws = requireWorkspace(ctx.cwd);
   const { working, archived } = listEvents(ws.omac);
-  const active = [...working, ...archived].filter((e) => e.learner_id === id && ["active", "paused", "evaluating"].includes(e.status));
+  const learnerEvents = [...working, ...archived].filter((e) => e.learner_id === id);
+  const eventIds = new Set(learnerEvents.map((e) => e.id));
+  const active = learnerEvents.filter((e) => ["active", "paused", "evaluating"].includes(e.status));
   if (active.length > 0) {
     throw new OmacError("purge_blocked", `cannot purge while active/paused/evaluating events exist for learner: ${active.map((e) => e.id).join(", ")}`);
   }
@@ -167,21 +213,73 @@ export function cmdLearnerPurge(ctx: CommandContext): unknown {
     const kept = (readJsonl(claimsFile) as { claim_id?: string }[]).filter((x) => !removed.has(x.claim_id ?? ""));
     writeJsonl(claimsFile, kept as never[]);
   }
-  for (const e of [...working, ...archived]) {
-    if (e.learner_id === id) {
-      rmSync(omacPath(ctx.cwd, "event", e.id), { recursive: true, force: true });
-      rmSync(omacPath(ctx.cwd, "event", "archive", e.id), { recursive: true, force: true });
-    }
+  for (const e of learnerEvents) {
+    rmSync(omacPath(ctx.cwd, "event", e.id), { recursive: true, force: true });
+    rmSync(omacPath(ctx.cwd, "event", "archive", e.id), { recursive: true, force: true });
   }
   const idxFile = omacPath(ctx.cwd, "event", "index", "index.jsonl");
   if (existsSync(idxFile)) {
-    const removed = new Set([...working, ...archived].filter((e) => e.learner_id === id).map((e) => e.id));
-    const kept = (readJsonl(idxFile) as { event_id?: string }[]).filter((x) => !removed.has(x.event_id ?? ""));
+    const kept = (readJsonl(idxFile) as { event_id?: string }[]).filter((x) => !eventIds.has(x.event_id ?? ""));
     writeJsonl(idxFile, kept as never[]);
+  }
+  const subflowsFile = omacPath(ctx.cwd, "event", "subflows.jsonl");
+  if (eventIds.size > 0 && existsSync(subflowsFile)) {
+    const kept = (readJsonl(subflowsFile) as { event_id?: string }[]).filter((x) => !eventIds.has(x.event_id ?? ""));
+    writeJsonl(subflowsFile, kept as never[]);
+  }
+  const artifacts = listArtifacts(ctx.cwd).filter((a) => eventIds.has(a.event_id));
+  if (artifacts.length > 0) {
+    const artsFile = artifactsFile(ws.omac);
+    const removed = new Set(artifacts.map((a) => a.artifact_id));
+    const kept = (readJsonl(artsFile) as { artifact_id?: string }[]).filter((x) => !removed.has(x.artifact_id ?? ""));
+    writeJsonl(artsFile, kept as never[]);
+    for (const a of artifacts) {
+      rmSync(join(ws.omac, a.rel_path), { force: true });
+    }
   }
   rmSync(omacPath(ctx.cwd, "learner", "views", `${id}.views.json`), { force: true });
   rmSync(omacPath(ctx.cwd, "report", `learner-${id}.md`), { force: true });
-  return { ok: true, purged: id, note: "export/backup copies and already-sent external data are NOT deleted" };
+  const retentionFile = omacPath(ctx.cwd, "learner", "state", "retention.jsonl");
+  if (existsSync(retentionFile)) writeJsonl(retentionFile, []);
+  const learnPathsFile = omacPath(ctx.cwd, "learner", "state", "learn-paths.jsonl");
+  if (eventIds.size > 0 && existsSync(learnPathsFile)) {
+    const kept = (readJsonl(learnPathsFile) as { event_id?: string }[]).filter((x) => !eventIds.has(x.event_id ?? ""));
+    writeJsonl(learnPathsFile, kept as never[]);
+  }
+  const analysisFile = omacPath(ctx.cwd, "report", "contest-analysis.jsonl");
+  if (eventIds.size > 0 && existsSync(analysisFile)) {
+    const kept = (readJsonl(analysisFile) as { event_id?: string }[]).filter((x) => !eventIds.has(x.event_id ?? ""));
+    writeJsonl(analysisFile, kept as never[]);
+  }
+  const upsolveFile = omacPath(ctx.cwd, "report", "contest-upsolve-links.jsonl");
+  if (eventIds.size > 0 && existsSync(upsolveFile)) {
+    const kept = (readJsonl(upsolveFile) as { event_id?: string }[]).filter((x) => !eventIds.has(x.event_id ?? ""));
+    writeJsonl(upsolveFile, kept as never[]);
+  }
+  const problemStatusFile = omacPath(ctx.cwd, "learner", "state", "problem-status.jsonl");
+  if (eventIds.size > 0 && existsSync(problemStatusFile)) {
+    const kept = (readJsonl(problemStatusFile) as { event_id?: string }[]).filter((x) => !eventIds.has(x.event_id ?? ""));
+    writeJsonl(problemStatusFile, kept as never[]);
+  }
+  for (const e of learnerEvents) {
+    rmSync(omacPath(ctx.cwd, "report", `event-${e.id}.md`), { force: true });
+    if (e.contest_ref) {
+      rmSync(join(ws.omac, "artifact", "contest", `${e.contest_ref}.json`), { force: true });
+    }
+  }
+  const profileDir = omacPath(ctx.cwd, "learner", "profile");
+  if (existsSync(profileDir)) {
+    for (const name of readdirSync(profileDir)) {
+      if (name.startsWith(id)) rmSync(join(profileDir, name), { force: true });
+    }
+  }
+  const integrity = integrityCheck(ctx.cwd);
+  return {
+    ok: true,
+    purged: id,
+    integrity: { ok: integrity.ok, issues: integrity.issues.map((i) => i.message) },
+    note: "export/backup copies and already-sent external data are NOT deleted",
+  };
 }
 
 export function cmdEvidenceAppend(ctx: CommandContext): unknown {
@@ -189,9 +287,52 @@ export function cmdEvidenceAppend(ctx: CommandContext): unknown {
   const cfg = readWorkspaceConfig(ctx.cwd);
   const eventId = flag(ctx.args.flags, "event-id");
   if (!eventId) throw new OmacError("missing_flag", "evidence append requires --event-id");
-  const { event } = loadEventAnywhere(ws.omac, eventId);
+  const { event, archived } = loadEventAnywhere(ws.omac, eventId);
   const operationId = flag(ctx.args.flags, "operation-id") ?? `op-${uuid().slice(0, 12)}`;
   const evidenceType = validateEvidenceType(flag(ctx.args.flags, "type") ?? "observation");
+  const isClosed = archived || event.status === "closed" || event.status === "cancelled";
+  if (isClosed && evidenceType !== "correction") {
+    throw new OmacError(
+      "event_closed",
+      `event '${eventId}' is closed/archived; ordinary evidence appends are rejected. Use correction path: evidence append --type correction --operation-id <id> --supercedes <evidence-id> --reason <text>`
+    );
+  }
+  if (evidenceType === "correction") {
+    const supersedes = (flag(ctx.args.flags, "supercedes") ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const reason = flag(ctx.args.flags, "reason") ?? flag(ctx.args.flags, "content");
+    const explicitOpId = flag(ctx.args.flags, "operation-id");
+    if (!explicitOpId || supersedes.length === 0 || !reason) {
+      throw new OmacError(
+        "correction_gate",
+        "correction evidence requires --operation-id, --supercedes <evidence-id> and --reason; original records are never rewritten"
+      );
+    }
+    for (const sid of supersedes) {
+      const original = getEvidence(ctx.cwd, sid);
+      if (original.event_id !== eventId) {
+        throw new OmacError("evidence_mismatch", `superseded evidence '${sid}' does not belong to event '${eventId}'`);
+      }
+    }
+  }
+  const boundaryId = flag(ctx.args.flags, "boundary-id");
+  if (boundaryId) {
+    getBoundary(ws.omac, eventId, boundaryId);
+  }
+  const evTargets = (flag(ctx.args.flags, "target-ids") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const t of evTargets) {
+    if (!event.target_ids.includes(t) && !t.startsWith("misconception.")) {
+      throw new OmacError(
+        "target_mismatch",
+        `evidence target '${t}' is not declared on event '${eventId}' (event targets: ${event.target_ids.join(", ") || "none"})`
+      );
+    }
+  }
   const extra: Record<string, unknown> = flag(ctx.args.flags, "extra") ? JSON.parse(flag(ctx.args.flags, "extra")!) : {};
   if (evidenceType === "intervention") {
     const intervention: Record<string, unknown> = {
@@ -211,6 +352,13 @@ export function cmdEvidenceAppend(ctx: CommandContext): unknown {
     Object.assign(intervention, extra);
     extra.intervention = intervention;
   }
+  if (evidenceType === "correction") {
+    extra.correction = {
+      operation_id: operationId,
+      reason: flag(ctx.args.flags, "reason") ?? "",
+      supersedes: (flag(ctx.args.flags, "supercedes") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+    };
+  }
   const record = appendEvidence(ctx.cwd, {
     evidence_type: evidenceType,
     event_id: eventId,
@@ -218,16 +366,14 @@ export function cmdEvidenceAppend(ctx: CommandContext): unknown {
     learner_id: event.learner_id,
     actor: validateActor(flag(ctx.args.flags, "actor") ?? "coach"),
     observed_at: flag(ctx.args.flags, "observed-at") ?? new Date().toISOString(),
-    target_ids: (flag(ctx.args.flags, "target-ids") ?? "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
+    target_ids: evTargets,
     problem_ref: flag(ctx.args.flags, "problem-ref"),
     artifact_ref: flag(ctx.args.flags, "artifact-ref"),
     source: flag(ctx.args.flags, "source"),
     content_summary: flag(ctx.args.flags, "content") ?? "",
     provenance: flag(ctx.args.flags, "provenance") ?? "cli",
     evidence_quality: validateEvidenceQuality(flag(ctx.args.flags, "quality") ?? "medium"),
+    independence_boundary_ref: boundaryId,
     operation_id: operationId,
     extraction_confidence: flag(ctx.args.flags, "extraction-confidence")
       ? Number(flag(ctx.args.flags, "extraction-confidence"))
@@ -243,6 +389,16 @@ export function cmdEventCreate(ctx: CommandContext): unknown {
   const eventType = validateEventType(flag(ctx.args.flags, "type") ?? "");
   const mode = flag(ctx.args.flags, "mode") ? validateMode(flag(ctx.args.flags, "mode")!) : undefined;
   const contestRef = flag(ctx.args.flags, "contest-ref");
+  const targetIds = (flag(ctx.args.flags, "target-ids") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const targetStatusFlag = flag(ctx.args.flags, "target-status");
+  const targetStatus = targetStatusFlag ? validateTargetStatus(targetStatusFlag) : undefined;
+  for (const t of targetIds) {
+    getTarget(ctx.cwd, t);
+  }
+  let artifactRef: string | undefined;
   if (eventType === "contest") {
     const artifact = flag(ctx.args.flags, "artifact");
     if (!artifact) {
@@ -260,26 +416,113 @@ export function cmdEventCreate(ctx: CommandContext): unknown {
         "live-contest solving events are not supported: OMAC Contest events are post-contest reviews only. Provide the finished artifact and confirm the activity has ended."
       );
     }
+    if (!existsSync(artifact)) throw new OmacError("file_not_found", `contest artifact not found: ${artifact}`);
+    const st = statSync(artifact);
+    if (!st.isFile()) throw new OmacError("invalid_artifact", `contest artifact must be a regular file: ${artifact}`);
+    if (st.size === 0) throw new OmacError("invalid_artifact", `contest artifact is empty: ${artifact}`);
+    const parsed = JSON.parse(readFileSync(artifact, "utf8"));
+    validateArtifact(parsed);
+    if (targetIds.length === 0) {
+      throw new OmacError("contest_gate", "Contest events require at least one confirmed target (--target-ids)");
+    }
+    if (targetStatus && targetStatus !== "confirmed") {
+      throw new OmacError("contest_gate", "Contest events require confirmed targets; provisional/unresolved targets are not allowed");
+    }
+    const ws = requireWorkspace(ctx.cwd);
+    const name = artifact.split("/").pop() ?? "artifact";
+    const content = readFileSync(artifact, "utf8");
+    const checksum = `sha256:${sha256(content).slice(0, 32)}`;
+    const rel = `artifact/contest-${name}`;
+    const destDir = join(ws.omac, "artifact");
+    mkdirSync(destDir, { recursive: true });
+    const destFile = join(destDir, `contest-${name}`);
+    writeFileSync(destFile, content, "utf8");
+    const art = addArtifact(ctx.cwd, {
+      eventId: "",
+      kind: "contest",
+      filePath: artifact,
+      relPath: rel,
+      checksum,
+    });
+    artifactRef = art.artifact_id;
   }
   const event = createEvent({
     cwd: ctx.cwd,
     eventType,
     learnerId: cfg.learner_id,
     workspaceId: cfg.workspace_id,
-    targetIds: (flag(ctx.args.flags, "target-ids") ?? "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean),
+    targetIds,
+    targetStatus,
     intent: flag(ctx.args.flags, "intent"),
     problemRef: flag(ctx.args.flags, "problem-ref"),
     contestRef,
+    artifactRef,
     mode,
     platformProfileRef: flag(ctx.args.flags, "platform-profile"),
     domainProfileRef: flag(ctx.args.flags, "domain-profile"),
     provenance: flag(ctx.args.flags, "provenance") ?? "cli",
     operationId: flag(ctx.args.flags, "operation-id"),
   });
+  if (artifactRef) {
+    relinkArtifact(ctx.cwd, artifactRef, event.id);
+  }
   return { ok: true, event_id: event.id, event };
+}
+
+function relinkArtifact(cwd: string, artifactId: string, eventId: string): void {
+  const ws = requireWorkspace(cwd);
+  const file = artifactsFile(ws.omac);
+  const records = readJsonl<{ artifact_id: string; event_id: string }>(file);
+  const hit = records.find((r) => r.artifact_id === artifactId);
+  if (hit) {
+    hit.event_id = eventId;
+    writeJsonl(file, records as never[]);
+  }
+}
+
+function validateTargetStatus(v: string): "confirmed" | "provisional" | "unresolved" {
+  if (v === "confirmed" || v === "provisional" || v === "unresolved") return v;
+  throw new OmacError("validation_error", `target-status must be one of confirmed|provisional|unresolved`);
+}
+
+export function cmdEventBoundarySet(ctx: CommandContext): unknown {
+  const ws = requireWorkspace(ctx.cwd);
+  const eventId = flag(ctx.args.flags, "event-id");
+  if (!eventId) throw new OmacError("missing_flag", "event boundary set requires --event-id");
+  const { event, archived } = loadEventAnywhere(ws.omac, eventId);
+  if (archived || event.status === "closed" || event.status === "cancelled") {
+    throw new OmacError("invalid_state", "cannot set boundary on closed/cancelled/archived event");
+  }
+  const boundaryJson = flag(ctx.args.flags, "boundary");
+  const targetId = flag(ctx.args.flags, "target-id");
+  let boundary: IndependenceBoundary;
+  if (boundaryJson) {
+    const parsed = JSON.parse(boundaryJson) as IndependenceBoundary;
+    if (!parsed.boundary_id) throw new OmacError("validation_error", "boundary json must contain boundary_id");
+    boundary = parsed;
+  } else if (targetId) {
+    const t = getTarget(ctx.cwd, targetId);
+    boundary = defaultBoundary(ctx.cwd, targetId);
+    boundary.evaluation_context = t.name;
+  } else {
+    throw new OmacError("missing_flag", "event boundary set requires --boundary <json> or --target-id <id>");
+  }
+  boundary.event_id = eventId;
+  boundary.captured_at = boundary.captured_at ?? nowIso();
+  boundary.operation_id = boundary.operation_id ?? flag(ctx.args.flags, "operation-id");
+  const snap = appendBoundary(ws.omac, eventId, boundary);
+  const wasRef = event.independence_boundary_ref;
+  event.independence_boundary_ref = snap.boundary_id;
+  updateEvent(ws.omac, event);
+  return { ok: true, event_id: eventId, boundary: snap, previous_boundary_ref: wasRef, resumed: snap.boundary_id !== boundary.boundary_id };
+}
+
+export function cmdEventBoundaryList(ctx: CommandContext): unknown {
+  const ws = requireWorkspace(ctx.cwd);
+  const eventId = flag(ctx.args.flags, "event-id");
+  if (!eventId) throw new OmacError("missing_flag", "event boundary list requires --event-id");
+  loadEventAnywhere(ws.omac, eventId);
+  return { ok: true, event_id: eventId, boundaries: getBoundaries(ws.omac, eventId) };
 }
 
 export function cmdEventAppend(ctx: CommandContext): unknown {
@@ -532,12 +775,19 @@ export function cmdEventList(ctx: CommandContext): unknown {
 export function cmdTargets(ctx: CommandContext): unknown {
   return {
     ok: true,
-    targets: listTargets(ctx.cwd).map((t) => ({
-      target_id: t.target_id,
-      name: t.name,
-      category: t.category,
-      version: t.target_version,
-    })),
+    targets: listTargets(ctx.cwd).map((t) => {
+      const prov = targetProvenance(ctx.cwd, t.target_id);
+      return {
+        target_id: t.target_id,
+        name: t.name,
+        category: t.category,
+        version: t.target_version,
+        source: prov?.source ?? { type: "builtin" },
+        pack_id: prov?.pack_id,
+        pack_version: prov?.pack_version,
+        license: prov?.license?.id,
+      };
+    }),
   };
 }
 
@@ -584,6 +834,13 @@ export function cmdArtifactAdd(ctx: CommandContext): unknown {
   if (!eventId) throw new OmacError("missing_flag", "artifact add requires --event-id");
   if (!filePath) throw new OmacError("missing_flag", "artifact add requires --file");
   if (!existsSync(filePath)) throw new OmacError("file_not_found", `file not found: ${filePath}`);
+  const opId = flag(ctx.args.flags, "operation-id");
+  if (opId) {
+    const dup = listArtifacts(ctx.cwd).find((a) => a.operation_id === opId);
+    if (dup) {
+      return { ok: true, artifact: dup, checksum: dup.sha256, stored_at: join(ctx.cwd, ".omac", dup.rel_path), resumed: true };
+    }
+  }
   const content = readFileSync(filePath, "utf8");
   const checksum = `sha256:${sha256(content).slice(0, 32)}`;
   const ws = requireWorkspace(ctx.cwd);
@@ -592,8 +849,8 @@ export function cmdArtifactAdd(ctx: CommandContext): unknown {
   mkdirSync(destDir, { recursive: true });
   writeFileSync(destFile, content, "utf8");
   const relPath = `artifact/${eventId}/${filePath.split("/").pop() ?? "artifact"}`;
-  const record = addArtifact(ctx.cwd, { eventId, kind: kind as "code", filePath, relPath, checksum });
-  return { ok: true, artifact: record, checksum, stored_at: destFile };
+  const record = addArtifact(ctx.cwd, { eventId, kind: kind as "code", filePath, relPath, checksum, operationId: opId });
+  return { ok: true, artifact: record, checksum, stored_at: destFile, resumed: false };
 }
 
 export function cmdArtifactList(ctx: CommandContext): unknown {
@@ -609,11 +866,18 @@ export function cmdTransferProbeAdd(ctx: CommandContext): unknown {
   if (!targetId) throw new OmacError("missing_flag", "transfer-probe add requires --target-id");
   const { event, archived } = loadEventAnywhere(ws.omac, eventId);
   if (archived) throw new OmacError("invalid_state", "cannot add transfer probe to archived event");
+  if (!event.target_ids.includes(targetId)) {
+    throw new OmacError(
+      "target_mismatch",
+      `transfer probe target '${targetId}' is not declared on event '${eventId}' (event targets: ${event.target_ids.join(", ") || "none"})`
+    );
+  }
   const result = validateTransferResult(flag(ctx.args.flags, "result") ?? "unknown");
   const probe: TransferProbe = {
-    probe_id: `prb-${nowIso().slice(0, 19).replace(/[^0-9]/g, "")}`,
+    probe_id: `prb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     event_id: eventId,
     target_id: targetId,
+    operation_id: flag(ctx.args.flags, "operation-id"),
     problem_ref: flag(ctx.args.flags, "problem-ref") ?? event.problem_ref,
     statement_hash: flag(ctx.args.flags, "statement-hash"),
     declared_before_start: flagBool(ctx.args.flags, "declared-before-start"),
@@ -626,9 +890,9 @@ export function cmdTransferProbeAdd(ctx: CommandContext): unknown {
     criteria_met: flag(ctx.args.flags, "criteria-met") ? flagBool(ctx.args.flags, "criteria-met") : undefined,
     evidence_ids: (flag(ctx.args.flags, "evidence-ids") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
   };
-  recordTransferProbe(ws.omac, eventId, probe);
+  const recorded = recordTransferProbe(ws.omac, eventId, probe);
   void cfg;
-  return { ok: true, probe };
+  return { ok: true, probe: recorded.probe, resumed: recorded.resumed };
 }
 
 export function cmdSubflow(ctx: CommandContext): unknown {
@@ -644,13 +908,14 @@ export function cmdSubflow(ctx: CommandContext): unknown {
     kind,
     started_at: nowIso(),
     evidence_ids: [],
+    operation_id: flag(ctx.args.flags, "operation-id"),
     debug: kind === "debug" ? { wa_types: (flag(ctx.args.flags, "wa-types") ?? "").split(",").map((s) => s.trim()).filter(Boolean), verdicts: (flag(ctx.args.flags, "verdicts") ?? "").split(",").map((s) => s.trim()).filter(Boolean), resolved: flag(ctx.args.flags, "resolved") ? flagBool(ctx.args.flags, "resolved") : undefined, root_cause: flag(ctx.args.flags, "root-cause") } : undefined,
     postmortem: kind === "postmortem" ? { original_direction: flag(ctx.args.flags, "original-direction"), failure_cause: flag(ctx.args.flags, "failure-cause"), insight_distance: flag(ctx.args.flags, "insight-distance") ? validateInsightDistance(flag(ctx.args.flags, "insight-distance")!) : undefined, pattern_extracted: flag(ctx.args.flags, "pattern"), anchor_algorithm: flag(ctx.args.flags, "anchor"), gave_up_early: flag(ctx.args.flags, "gave-up-early") ? flagBool(ctx.args.flags, "gave-up-early") : undefined, hint_too_early: flag(ctx.args.flags, "hint-too-early") ? flagBool(ctx.args.flags, "hint-too-early") : undefined } : undefined,
     teach_back: kind === "teach-back" ? { result: validateTeachBackResult(flag(ctx.args.flags, "result") ?? "fail"), content: flag(ctx.args.flags, "content") } : undefined,
     upsolve_review: kind === "upsolve-review" ? { original_direction: flag(ctx.args.flags, "original-direction"), failure_cause: flag(ctx.args.flags, "failure-cause"), insight_distance: flag(ctx.args.flags, "insight-distance") ? validateInsightDistance(flag(ctx.args.flags, "insight-distance")!) : undefined, key_insight: flag(ctx.args.flags, "key-insight"), pattern_extraction: flag(ctx.args.flags, "pattern"), transfer_readiness: flag(ctx.args.flags, "transfer-readiness") ? validateTransferReadiness(flag(ctx.args.flags, "transfer-readiness")!) : undefined, follow_up_target_ids: (flag(ctx.args.flags, "follow-up-targets") ?? "").split(",").map((s) => s.trim()).filter(Boolean) } : undefined,
   };
-  appendSubflow(ctx.cwd, record);
-  return { ok: true, subflow: record };
+  const appended = appendSubflow(ctx.cwd, record);
+  return { ok: true, subflow: appended, resumed: appended.subflow_id !== record.subflow_id };
 }
 
 export function cmdSubflowList(ctx: CommandContext): unknown {
@@ -673,6 +938,15 @@ export function cmdTransferSummary(ctx: CommandContext): unknown {
   return { ok: true, summary: transferProbeSummary(ctx.cwd, flag(ctx.args.flags, "event-id")) };
 }
 
+export function cmdTransferRate(ctx: CommandContext): unknown {
+  const report = transferRateReport(ctx.cwd, {
+    timeWindowDays: flag(ctx.args.flags, "time-window-days") ? Number(flag(ctx.args.flags, "time-window-days")) : undefined,
+    minSamples: flag(ctx.args.flags, "min-samples") ? Number(flag(ctx.args.flags, "min-samples")) : undefined,
+    learnerId: flag(ctx.args.flags, "learner-id"),
+  });
+  return { ok: true, report };
+}
+
 export function cmdPackInstall(ctx: CommandContext): unknown {
   const src = flag(ctx.args.flags, "source") ?? ctx.args.command[2];
   if (!src) throw new OmacError("missing_flag", "pack install requires --source <dir>");
@@ -687,11 +961,82 @@ export function cmdPackList(ctx: CommandContext): unknown {
     packs: installedPacks(ctx.cwd).map((p) => ({
       pack_id: p.manifest.pack_id,
       pack_version: p.manifest.pack_version,
+      schema_version: p.manifest.schema_version,
       name: p.manifest.name,
       kind: p.manifest.kind,
-      license: p.manifest.license,
+      license: manifestLicense(p.manifest),
+      source: p.manifest.source,
+      dependencies: p.manifest.dependencies,
+      builtin: p.builtin,
     })),
   };
+}
+
+function cardSummary(ref: { card: { name: string; version?: string }; pack_id: string; pack_version: string; source?: { type?: string }; license?: { id?: string } }): Record<string, unknown> {
+  return {
+    id: (ref.card as { pattern_id?: string; misconception_id?: string; pedagogy_id?: string; algorithm_id?: string }).pattern_id
+      ?? (ref.card as { misconception_id?: string }).misconception_id
+      ?? (ref.card as { pedagogy_id?: string }).pedagogy_id
+      ?? (ref.card as { algorithm_id?: string }).algorithm_id,
+    name: ref.card.name,
+    version: ref.card.version ?? ref.pack_version,
+    pack_id: ref.pack_id,
+    pack_version: ref.pack_version,
+    source: ref.source?.type,
+    license: ref.license?.id,
+  };
+}
+
+export function cmdTargetGet(ctx: CommandContext): unknown {
+  const id = ctx.args.command[2] ?? flag(ctx.args.flags, "target-id");
+  if (!id) throw new OmacError("missing_flag", "target get requires <target-id>");
+  const t = getTarget(ctx.cwd, id);
+  const prov = targetProvenance(ctx.cwd, id);
+  return { ok: true, target: t, provenance: prov };
+}
+
+export function cmdPatternList(ctx: CommandContext): unknown {
+  return { ok: true, patterns: listPatternCards(ctx.cwd).map(cardSummary) };
+}
+
+export function cmdPatternGet(ctx: CommandContext): unknown {
+  const id = ctx.args.command[2] ?? flag(ctx.args.flags, "pattern-id");
+  if (!id) throw new OmacError("missing_flag", "pattern get requires <pattern-id>");
+  const ref = getPatternCard(ctx.cwd, id);
+  return { ok: true, pattern: ref.card, provenance: { pack_id: ref.pack_id, pack_version: ref.pack_version, source: ref.source, license: ref.license } };
+}
+
+export function cmdMisconceptionList(ctx: CommandContext): unknown {
+  return { ok: true, misconceptions: listMisconceptionCards(ctx.cwd).map(cardSummary) };
+}
+
+export function cmdMisconceptionGet(ctx: CommandContext): unknown {
+  const id = ctx.args.command[2] ?? flag(ctx.args.flags, "misconception-id");
+  if (!id) throw new OmacError("missing_flag", "misconception get requires <misconception-id>");
+  const ref = getMisconceptionCard(ctx.cwd, id);
+  return { ok: true, misconception: ref.card, provenance: { pack_id: ref.pack_id, pack_version: ref.pack_version, source: ref.source, license: ref.license } };
+}
+
+export function cmdPedagogyList(ctx: CommandContext): unknown {
+  return { ok: true, pedagogy: listPedagogyCards(ctx.cwd).map(cardSummary) };
+}
+
+export function cmdPedagogyGet(ctx: CommandContext): unknown {
+  const id = ctx.args.command[2] ?? flag(ctx.args.flags, "pedagogy-id");
+  if (!id) throw new OmacError("missing_flag", "pedagogy get requires <pedagogy-id>");
+  const ref = getPedagogyCard(ctx.cwd, id);
+  return { ok: true, pedagogy: ref.card, provenance: { pack_id: ref.pack_id, pack_version: ref.pack_version, source: ref.source, license: ref.license } };
+}
+
+export function cmdAlgorithmList(ctx: CommandContext): unknown {
+  return { ok: true, algorithms: listAlgorithmCards(ctx.cwd).map(cardSummary) };
+}
+
+export function cmdAlgorithmGet(ctx: CommandContext): unknown {
+  const id = ctx.args.command[2] ?? flag(ctx.args.flags, "algorithm-id");
+  if (!id) throw new OmacError("missing_flag", "algorithm get requires <algorithm-id>");
+  const ref = getAlgorithmCard(ctx.cwd, id);
+  return { ok: true, algorithm: ref.card, provenance: { pack_id: ref.pack_id, pack_version: ref.pack_version, source: ref.source, license: ref.license } };
 }
 
 export function cmdPackPrereq(ctx: CommandContext): unknown {
@@ -728,6 +1073,7 @@ export function cmdRetentionList(ctx: CommandContext): unknown {
       next_review_at: r.next_review_at,
       window_days: r.recommended_review_window_days,
     })),
+    meta: metricMeta(all.length > 0 ? "ok" : "insufficient_evidence", all.length, "retention:heuristic", all.length === 0 ? "no retention records; nothing has been scheduled or recalled" : undefined),
   };
 }
 
@@ -747,6 +1093,7 @@ export function cmdRetentionSchedule(ctx: CommandContext): unknown {
     recommended_review_window_days: r.recommended_review_window_days,
     next_review_at: r.next_review_at,
     history: r.reviews.map((v) => ({ form: v.form, result: v.result, reviewed_at: v.reviewed_at })),
+    meta: metricMeta("ok", r.review_count, "retention:heuristic", r.review_count < 2 ? `only ${r.review_count} review(s); schedule is a heuristic baseline` : undefined),
   };
 }
 
@@ -774,6 +1121,7 @@ export function cmdRetentionRecall(ctx: CommandContext): unknown {
     recall_strength: record.recall_strength,
     next_review_at: record.next_review_at,
     window_days: record.recommended_review_window_days,
+    meta: metricMeta("ok", record.review_count, "retention:heuristic", "strength update is a deterministic heuristic; no causal claim"),
   };
 }
 
@@ -1011,6 +1359,7 @@ export function cmdRetentionModelStatus(ctx: CommandContext): unknown {
     retention_estimate: advanced.retention_estimate,
     next_review_at: advanced.next_review_at,
     overdue_decay_note: advanced.next_review_at && advanced.next_review_at < new Date().toISOString() ? "overdue: estimate decayed" : "not overdue",
+    meta: metricMeta(r.review_count >= 2 ? "ok" : "insufficient_evidence", r.review_count, "retention:exp-backoff-heuristic", r.review_count < 2 ? `only ${r.review_count} review(s); retention estimate is not yet stable` : "heuristic estimate; no causal claim"),
   };
 }
 
@@ -1018,12 +1367,12 @@ export function cmdCoachEval(ctx: CommandContext): unknown {
   const target = flag(ctx.args.flags, "target");
   if (!target) throw new OmacError("missing_flag", "coach eval requires --target");
   const result = coachEval(ctx.cwd, target, { minEvents: flag(ctx.args.flags, "min-events") ? Number(flag(ctx.args.flags, "min-events")) : undefined });
-  return { ok: true, ...result };
+  return { ok: true, ...result, status: result.entries.some((e) => !e.insufficient) ? "ok" : "insufficient_evidence", uncertainty: result.sample_size === 0 ? "no intervention evidence for this target" : "heuristic gain sign; no causal claim" };
 }
 
 export function cmdCoachPolicy(ctx: CommandContext): unknown {
   const result = coachPolicy(ctx.cwd, { minSamples: flag(ctx.args.flags, "min-samples") ? Number(flag(ctx.args.flags, "min-samples")) : undefined });
-  return { ok: true, ...result };
+  return { ok: true, ...result, status: result.policies.length > 0 ? "ok" : "insufficient_evidence", uncertainty: result.sample_size === 0 ? "no intervention evidence recorded" : "policy effectiveness is a heuristic baseline" };
 }
 
 export function cmdCoachGainMatrix(ctx: CommandContext): unknown {
@@ -1043,18 +1392,24 @@ export function cmdPlan(ctx: CommandContext): unknown {
   const horizon = flag(ctx.args.flags, "horizon") ? Number(flag(ctx.args.flags, "horizon")) : 4;
   const targets = (flag(ctx.args.flags, "targets") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   const result = longTermPlan(ctx.cwd, { horizonWeeks: horizon, targets });
-  return { ok: true, ...result };
+  const goalCount = result.weeks.reduce((n, w) => n + w.goals.length, 0);
+  return { ok: true, ...result, status: goalCount > 0 ? "ok" : "insufficient_evidence", sample_size: goalCount, uncertainty: goalCount === 0 ? "no due retention or planned targets; plan is empty" : "plan is a deterministic heuristic; not a commitment" };
 }
 
 export function cmdPackUpdate(ctx: CommandContext): unknown {
   const packId = ctx.args.command[2] ?? flag(ctx.args.flags, "pack-id");
   if (!packId) throw new OmacError("missing_flag", "pack update requires <pack-id>");
   const result = updatePack(ctx.cwd, packId, { source: flag(ctx.args.flags, "source"), apply: flagBool(ctx.args.flags, "apply") });
-  return { ok: true, ...result };
+  return { ok: true, ...result, source: "pack-audit:.versions.jsonl", sample_size: 1, uncertainty: result.action === "upgraded" ? "audit record appended; rollback requires a prior version pack" : undefined };
 }
 
 export function cmdPackVersions(ctx: CommandContext): unknown {
   const packId = ctx.args.command[2] ?? flag(ctx.args.flags, "pack-id");
   if (!packId) throw new OmacError("missing_flag", "pack versions requires <pack-id>");
-  return { ok: true, ...packVersions(ctx.cwd, packId) };
+  const result = packVersions(ctx.cwd, packId);
+  return { ok: true, ...result, status: result.versions.length > 0 ? "ok" : "insufficient_evidence", sample_size: result.versions.length, source: "pack-audit:.versions.jsonl", uncertainty: result.versions.length === 0 ? "no version audit records for this pack" : "audit trail is replayable from/to" };
+}
+
+function metricMeta(status: "ok" | "insufficient_evidence", sampleSize: number, source: string, uncertainty?: string): { status: string; sample_size: number; source: string; uncertainty?: string } {
+  return { status, sample_size: sampleSize, source, uncertainty };
 }

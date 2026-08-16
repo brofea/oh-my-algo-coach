@@ -3,12 +3,13 @@ import { join } from "node:path";
 import { OmacError } from "../core/ids.js";
 import { DIRS, requireWorkspace, readWorkspaceConfig, WARNING_TEXT, omacPath } from "../store/workspace.js";
 import { readJsonl } from "../store/jsonl.js";
-import { EventRecord, EvidenceRecord, AssessmentClaim } from "../core/types.js";
-import { loadEventAnywhere, listEvents } from "../store/event_store.js";
+import { EventRecord, EvidenceRecord, AssessmentClaim, ArtifactRecord } from "../core/types.js";
+import { loadEventAnywhere, listEvents, getBoundaries } from "../store/event_store.js";
 import { listEvidence } from "../store/evidence_store.js";
 import { listClaims } from "../store/claim_store.js";
 import { assertSchemaVersion } from "../core/schema.js";
 import { listConnectors, cachedContent } from "./ecosystem.js";
+import { listArtifacts } from "../store/knowledge_store.js";
 
 export interface IntegrityIssue {
   severity: "error" | "warning";
@@ -71,6 +72,7 @@ export function integrityCheck(cwd: string): IntegrityReport {
   }
   const { working, archived } = listEvents(ws.omac);
   const allEvents = [...working, ...archived];
+  const eventById = new Map(allEvents.map((e) => [e.id, e]));
   for (const e of allEvents) {
     if (e.status === "closed" || e.status === "cancelled") {
       const dir = join(ws.omac, "event", "archive", e.id);
@@ -86,7 +88,87 @@ export function integrityCheck(cwd: string): IntegrityReport {
       issues.push({ severity: "error", code: "dangling_event_ref", message: `evidence references missing event ${eid}` });
     }
   }
+
+  const idxFile = join(ws.omac, "event", "index", "index.jsonl");
+  if (existsSync(idxFile)) {
+    const seen = new Set<string>();
+    for (const entry of readJsonl<{ event_id?: string; archived?: boolean }>(idxFile)) {
+      if (!entry.event_id) continue;
+      if (seen.has(entry.event_id)) {
+        issues.push({ severity: "error", code: "dup_index", message: `duplicate event index entry ${entry.event_id}` });
+      }
+      seen.add(entry.event_id);
+      const event = eventById.get(entry.event_id);
+      if (event && entry.archived && !event.archive_ref && event.status !== "closed" && event.status !== "cancelled") {
+        issues.push({ severity: "error", code: "index_status_mismatch", message: `index marks ${entry.event_id} archived but event is not closed` });
+      }
+    }
+  }
+
+  for (const c of claims) {
+    const bndRef = c.independence_boundary_ref;
+    if (bndRef) {
+      const eventIdRef = c.input_snapshot_ref?.startsWith("event:") ? c.input_snapshot_ref.slice(6) : undefined;
+      if (eventIdRef && eventById.has(eventIdRef)) {
+        const snapshots = getBoundaries(ws.omac, eventIdRef);
+        if (!snapshots.some((b) => b.boundary_id === bndRef)) {
+          issues.push({ severity: "error", code: "dangling_boundary_ref", message: `claim ${c.claim_id} references missing boundary ${bndRef} on event ${eventIdRef}` });
+        }
+      }
+    }
+  }
+  for (const e of evidence) {
+    const bndRef = e.independence_boundary_ref;
+    if (bndRef) {
+      const snapshots = getBoundaries(ws.omac, e.event_id);
+      if (!snapshots.some((b) => b.boundary_id === bndRef)) {
+        issues.push({ severity: "error", code: "dangling_boundary_ref", message: `evidence ${e.evidence_id} references missing boundary ${bndRef} on event ${e.event_id}` });
+      }
+    }
+  }
+
+  const artifacts = listArtifacts(cwd);
+  const artifactIds = new Set<string>();
+  for (const a of artifacts) {
+    if (artifactIds.has(a.artifact_id)) {
+      issues.push({ severity: "error", code: "dup_artifact", message: `duplicate artifact id ${a.artifact_id}` });
+    }
+    artifactIds.add(a.artifact_id);
+    if (!eventById.has(a.event_id)) {
+      issues.push({ severity: "error", code: "dangling_artifact_event", message: `artifact ${a.artifact_id} references missing event ${a.event_id}` });
+    }
+    if (!existsSync(join(ws.omac, a.rel_path))) {
+      issues.push({ severity: "warning", code: "artifact_file_missing", message: `artifact file missing: ${a.rel_path}` });
+    }
+  }
+
+  checkPurgeResiduals(cwd, ws.omac, issues, eventById);
   return { ok: issues.every((i) => i.severity !== "error"), issues };
+}
+
+function checkPurgeResiduals(cwd: string, omac: string, issues: { severity: "error" | "warning"; code: string; message: string }[], eventById: Map<string, EventRecord>): void {
+  const learnerStateDir = join(omac, "learner", "state");
+  const residualChecks: [string, string, (r: { event_id?: string }) => boolean][] = [
+    ["problem-status.jsonl", "orphan_problem_status", (r) => Boolean(r.event_id && !eventById.has(r.event_id))],
+    ["learn-paths.jsonl", "orphan_learn_path", (r) => Boolean(r.event_id && !eventById.has(r.event_id))],
+  ];
+  for (const [file, code, isOrphan] of residualChecks) {
+    const p = join(learnerStateDir, file);
+    if (!existsSync(p)) continue;
+    for (const rec of readJsonl<{ event_id?: string }>(p)) {
+      if (isOrphan(rec)) {
+        issues.push({ severity: "warning", code, message: `${file} references missing event ${rec.event_id}` });
+      }
+    }
+  }
+  const subflowsFile = join(omac, "event", "subflows.jsonl");
+  if (existsSync(subflowsFile)) {
+    for (const rec of readJsonl<{ event_id?: string }>(subflowsFile)) {
+      if (rec.event_id && !eventById.has(rec.event_id)) {
+        issues.push({ severity: "warning", code: "orphan_subflow", message: `subflows.jsonl references missing event ${rec.event_id}` });
+      }
+    }
+  }
 }
 
 export function doctor(cwd: string): { integrity: IntegrityReport; warnings: string[]; tips: string[]; connectors?: unknown[] } {

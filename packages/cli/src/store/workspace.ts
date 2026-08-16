@@ -86,6 +86,19 @@ export function readWorkspaceConfig(cwd: string): WorkspaceConfig {
   return cfg;
 }
 
+export function readWorkspaceConfigLoose(cwd: string): WorkspaceConfig {
+  const ws = requireWorkspace(cwd);
+  const p = join(ws.omac, "config", "workspace.json");
+  if (!existsSync(p)) {
+    throw new OmacError("corrupt_workspace", "workspace.json missing; run 'omac doctor'");
+  }
+  const cfg = JSON.parse(readFileSync(p, "utf8")) as WorkspaceConfig;
+  if (!cfg.schema_version) {
+    throw new OmacError("corrupt_workspace", "workspace.json missing schema_version; run 'omac migrate'");
+  }
+  return cfg;
+}
+
 export function writeWorkspaceConfig(cwd: string, cfg: WorkspaceConfig): void {
   const ws = requireWorkspace(cwd);
   writeFileSync(join(ws.omac, "config", "workspace.json"), JSON.stringify(cfg, null, 2));

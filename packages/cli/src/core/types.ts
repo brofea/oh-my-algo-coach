@@ -15,6 +15,9 @@ export type IndependenceStatus = "unknown" | "assisted" | "independent" | "trans
 
 export interface IndependenceBoundary {
   boundary_id: string;
+  event_id?: string;
+  mode?: "independent" | "assisted" | "transferred" | "retained" | "mixed";
+  operation_id?: string;
   problem_familiarity?: string;
   prior_exposure?: boolean;
   allowed_resources?: string[];
@@ -96,6 +99,7 @@ export interface SubflowRecord {
   started_at: string;
   ended_at?: string;
   evidence_ids: string[];
+  operation_id?: string;
   debug?: DebugSubflowRecord;
   postmortem?: PostmortemRecord;
   teach_back?: TeachBackRecord;
@@ -123,6 +127,7 @@ export interface ArtifactRecord {
   file_path: string;
   rel_path: string;
   sha256: string;
+  operation_id?: string;
   added_at: string;
 }
 
@@ -250,9 +255,11 @@ export interface EventRecord {
   platform_profile_ref?: string;
   domain_profile_ref?: string;
   target_ids: string[];
+  target_status?: "confirmed" | "provisional" | "unresolved";
   intent?: string;
   problem_ref?: string;
   contest_ref?: string;
+  artifact_ref?: string;
   mode: CoachingMode;
   status: EventStatus;
   started_at?: string;
@@ -319,6 +326,7 @@ export interface AssessmentClaim {
   created_at: string;
   unknown_reason?: string;
   student_confirmation?: "confirmed" | "rejected" | "pending" | "not_required";
+  independence_boundary_ref?: string;
   supersedes?: string[];
   contradicted_by?: string[];
   extra?: Record<string, unknown>;
@@ -390,22 +398,95 @@ export interface TargetContract {
   independence_boundary_defaults?: Partial<IndependenceBoundary>;
 }
 
+export type PackKind = "algorithm" | "pattern" | "misconception" | "pedagogy" | "target";
+export const PACK_KINDS: readonly PackKind[] = ["algorithm", "pattern", "misconception", "pedagogy", "target"];
+
+export interface PackSource {
+  type: string;
+  uri?: string;
+  retrieved_at?: string;
+}
+
+export interface PackLicense {
+  id: string;
+  notice?: string;
+}
+
 export interface KnowledgePackManifest {
   pack_id: string;
   pack_version: string;
+  schema_version?: string;
   name: string;
-  kind: "algorithm" | "pattern" | "misconception" | "pedagogy" | "target";
-  source_url?: string;
+  kind: PackKind;
+  source?: PackSource;
   source_type?: string;
+  source_url?: string;
   retrieved_at?: string;
-  license?: string;
+  license?: string | PackLicense;
   content_files: string[];
+  dependencies?: string[];
+  description?: string;
+}
+
+export interface PatternCard {
+  pattern_id: string;
+  name: string;
+  version?: string;
+  pattern?: string;
+  observation?: string[];
+  transformation?: string[];
+  candidate_techniques?: string[];
+  related_targets?: string[];
+  example_problems?: string[];
+  source?: string;
+}
+
+export interface MisconceptionCard {
+  misconception_id: string;
+  name: string;
+  description: string;
+  related_targets?: string[];
+  suggested_interventions?: string[];
+  version?: string;
+}
+
+export interface PedagogyCard {
+  pedagogy_id: string;
+  name: string;
+  description: string;
+  strategy?: string;
+  related_targets?: string[];
+  evidence_basis?: string;
+  version?: string;
+}
+
+export interface AlgorithmCard {
+  algorithm_id: string;
+  name: string;
+  category?: string;
+  description: string;
+  prerequisites?: string[];
+  complexity?: string;
+  variants?: string[];
+  related_targets?: string[];
+  version?: string;
+}
+
+export interface PackCardRef<T> {
+  card: T;
+  card_file: string;
+  pack_id: string;
+  pack_version: string;
+  schema_version?: string;
+  source?: PackSource;
+  license?: PackLicense;
 }
 
 export interface TransferProbe {
   probe_id: string;
   event_id: string;
   target_id: string;
+  operation_id?: string;
   problem_ref?: string;
   statement_hash?: string;
   declared_before_start: boolean;

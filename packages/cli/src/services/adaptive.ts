@@ -16,6 +16,10 @@ export interface RatingResult {
   confidence: number;
   skills: { skill_id: string; rating: number; confidence: number; evidence_count: number }[];
   note: string;
+  status: "ok" | "insufficient_evidence";
+  sample_size: number;
+  source: string;
+  time_window: { start?: string; end?: string };
 }
 
 export function computeRating(cwd: string, learnerId?: string): RatingResult {
@@ -40,12 +44,17 @@ export function computeRating(cwd: string, learnerId?: string): RatingResult {
     totalWeight += weight;
   }
   skills.sort((a, b) => b.rating - a.rating);
+  const claimTimes = view.target_history.map((t) => t.ended_at).filter(Boolean).sort() as string[];
   return {
     learner_id: id,
     overall: totalWeight > 0 ? Math.round(total / totalWeight) : 0,
     confidence: Math.min(1, totalWeight),
     skills,
     note: "display-layer rating derived from claim estimates; NOT the underlying learner model (PRD §8.7)",
+    status: skills.length >= 1 ? "ok" : "insufficient_evidence",
+    sample_size: skills.length,
+    source: "view:claims:reducer-v1 (select-latest-v1)",
+    time_window: { start: claimTimes[0], end: claimTimes[claimTimes.length - 1] },
   };
 }
 
@@ -58,12 +67,22 @@ export interface CalibrationBin {
   brier: number;
 }
 
-export function computeCalibration(cwd: string): { learner_id: string; bins: CalibrationBin[]; brier_score: number; note: string } {
+export function computeCalibration(cwd: string): { learner_id: string; bins: CalibrationBin[]; brier_score: number; note: string; status: "ok" | "insufficient_evidence"; sample_size: number; source: string } {
   const cfg = readWorkspaceConfig(cwd);
   const id = cfg.learner_id;
   if (!id) throw new OmacError("no_learner", "no learner bound");
   const statuses = problemStatuses(cwd);
-  if (statuses.length === 0) throw new OmacError("no_data", "no problem status records for calibration");
+  if (statuses.length === 0) {
+    return {
+      learner_id: id,
+      bins: [],
+      brier_score: 0,
+      note: "heuristic calibration baseline; predicted probabilities are a sigmoid heuristic, not a trained model",
+      status: "insufficient_evidence",
+      sample_size: 0,
+      source: "problem-status:ecosystem",
+    };
+  }
   const bins = new Map<string, { n: number; hits: number; brierSum: number }>();
   for (const s of statuses) {
     const bucket = bucketOf(s.problem_ref);
@@ -87,6 +106,9 @@ export function computeCalibration(cwd: string): { learner_id: string; bins: Cal
     bins: out,
     brier_score: out.length > 0 ? totalBrier / out.length : 0,
     note: "heuristic calibration baseline; predicted probabilities are a sigmoid heuristic, not a trained model",
+    status: statuses.length >= 5 ? "ok" : "insufficient_evidence",
+    sample_size: statuses.length,
+    source: "problem-status:ecosystem",
   };
 }
 
@@ -112,17 +134,19 @@ export interface CoachEvalEntry {
   confidence: number;
   sample_evidence: string[];
   insufficient: boolean;
+  sample_size: number;
 }
 
-export function coachEval(cwd: string, target: string, opts: { minEvents?: number }): { target: string; entries: CoachEvalEntry[] } {
+export function coachEval(cwd: string, target: string, opts: { minEvents?: number }): { target: string; entries: CoachEvalEntry[]; source: string; sample_size: number } {
   const evidence = listEvidence(cwd).filter((e) => e.evidence_type === "intervention" && (e.target_ids ?? []).includes(target));
   const claims = listClaims(cwd).filter((c) => c.target_id === target || c.skill_id === target);
   const byType = new Map<string, CoachEvalEntry>();
   for (const ev of evidence) {
     const type = (ev.extra?.intervention as { intervention_type?: string } | undefined)?.intervention_type ?? "hint";
-    const entry = byType.get(type) ?? { intervention_type: type, observed_count: 0, gain_sign: "flat" as const, confidence: 0, sample_evidence: [], insufficient: false };
+    const entry = byType.get(type) ?? { intervention_type: type, observed_count: 0, gain_sign: "flat" as const, confidence: 0, sample_evidence: [], insufficient: false, sample_size: 0 };
     entry.observed_count++;
     entry.sample_evidence.push(ev.evidence_id);
+    entry.sample_size = entry.observed_count;
     byType.set(type, entry);
   }
   const min = opts.minEvents ?? 3;
@@ -142,16 +166,18 @@ export function coachEval(cwd: string, target: string, opts: { minEvents?: numbe
     entries.push(e);
   }
   entries.sort((a, b) => b.observed_count - a.observed_count);
-  return { target, entries };
+  return { target, entries, source: "evidence:intervention+claims", sample_size: evidence.length };
 }
 
-export function coachPolicy(cwd: string, opts: { minSamples?: number }): { policies: { intervention_type: string; target: string; effectiveness: string; confidence: number; samples: number; note?: string }[] } {
+export function coachPolicy(cwd: string, opts: { minSamples?: number }): { policies: { intervention_type: string; target: string; effectiveness: string; confidence: number; samples: number; note?: string }[]; source: string; sample_size: number } {
   const claims = listClaims(cwd);
   const targets = new Set(claims.map((c) => c.target_id ?? c.skill_id).filter(Boolean));
   const minSamples = opts.minSamples ?? 3;
   const policies: { intervention_type: string; target: string; effectiveness: string; confidence: number; samples: number; note?: string }[] = [];
+  let sampleSize = 0;
   for (const t of targets) {
     const evalResult = coachEval(cwd, t, { minEvents: minSamples });
+    sampleSize += evalResult.sample_size;
     for (const e of evalResult.entries) {
       policies.push({
         intervention_type: e.intervention_type,
@@ -163,7 +189,7 @@ export function coachPolicy(cwd: string, opts: { minSamples?: number }): { polic
       });
     }
   }
-  return { policies };
+  return { policies, source: "evidence:intervention+claims", sample_size: sampleSize };
 }
 
 export interface GainMatrixCell {
@@ -174,7 +200,7 @@ export interface GainMatrixCell {
   gain_direction: "up" | "down" | "flat";
 }
 
-export function gainMatrix(cwd: string): { learner_id: string; cells: GainMatrixCell[] } {
+export function gainMatrix(cwd: string): { learner_id: string; cells: GainMatrixCell[]; source: string; sample_size: number; status: "ok" | "insufficient_evidence" } {
   const cfg = readWorkspaceConfig(cwd);
   const evidence = listEvidence(cwd).filter((e) => e.evidence_type === "intervention");
   const claims = listClaims(cwd);
@@ -203,7 +229,13 @@ export function gainMatrix(cwd: string): { learner_id: string; cells: GainMatrix
     if (c.gain_direction !== "flat") existing.gain_direction = c.gain_direction;
     aggregated.set(key, existing);
   }
-  return { learner_id: cfg.learner_id ?? "unknown", cells: [...aggregated.values()] };
+  return {
+    learner_id: cfg.learner_id ?? "unknown",
+    cells: [...aggregated.values()],
+    source: "evidence:intervention+claims",
+    sample_size: evidence.length,
+    status: evidence.length >= 3 ? "ok" : "insufficient_evidence",
+  };
 }
 
 export function visualize(cwd: string, opts: { kind: "chart" | "graph" | "ascii"; view: "algorithm" | "problem-solving" | "retention" | "rating"; concept?: string }): { kind: string; title: string; body: string } {
@@ -224,7 +256,7 @@ export function visualize(cwd: string, opts: { kind: "chart" | "graph" | "ascii"
   throw new OmacError("validation_error", `unsupported view '${opts.view}'`);
 }
 
-export function longTermPlan(cwd: string, opts: { horizonWeeks: number; targets?: string[] }): { learner_id: string; weeks: { week: number; goals: { target: string; action: string; reason: string; evidence: string[] }[] }[] } {
+export function longTermPlan(cwd: string, opts: { horizonWeeks: number; targets?: string[] }): { learner_id: string; source: string; weeks: { week: number; goals: { target: string; action: string; reason: string; evidence: string[] }[] }[] } {
   const cfg = readWorkspaceConfig(cwd);
   const id = cfg.learner_id ?? "unknown";
   const retention = listRetention(cwd);
@@ -244,13 +276,22 @@ export function longTermPlan(cwd: string, opts: { horizonWeeks: number; targets?
     }
     weeks.push({ week: w, goals });
   }
-  return { learner_id: id, weeks };
+  return { learner_id: id, source: "retention:heuristic+plan", weeks };
 }
 
-export function packVersions(cwd: string, packId: string): { pack_id: string; versions: { version: string; installed_at: string }[] } {
+export interface PackVersionAuditEntry {
+  pack_id: string;
+  from?: string;
+  to: string;
+  operation_id: string;
+  installed_at: string;
+  result: "no-op" | "upgrade-available" | "upgraded" | "rollback" | "failed";
+}
+
+export function packVersions(cwd: string, packId: string): { pack_id: string; versions: PackVersionAuditEntry[] } {
   const ws = requireWorkspace(cwd);
   const f = join(ws.omac, "knowledge", "packs", ".versions.jsonl");
-  const versions = jsonExists(f) ? readJsonl<{ pack_id: string; version: string; installed_at: string }>(f).filter((v) => v.pack_id === packId) : [];
+  const versions = jsonExists(f) ? readJsonl<PackVersionAuditEntry>(f).filter((v) => v.pack_id === packId) : [];
   return { pack_id: packId, versions };
 }
 
@@ -258,15 +299,62 @@ export function updatePack(cwd: string, packId: string, opts: { source?: string;
   const ws = requireWorkspace(cwd);
   const installed = installedPacks(cwd).find((p) => p.manifest.pack_id === packId);
   if (!installed) throw new OmacError("pack_not_found", `pack '${packId}' not installed`);
+  if (installed.builtin) {
+    throw new OmacError(
+      "builtin_pack",
+      `pack '${packId}' is a builtin registry pack and cannot be modified in place; install an override copy with 'pack install --source <dir>'`
+    );
+  }
   const current = installed.manifest.pack_version;
   if (!opts.source) return { pack_id: packId, current, action: "no-op" };
   const srcManifest = readJson<{ pack_id: string; pack_version: string }>(join(opts.source, "manifest.json"));
   if (srcManifest.pack_id !== packId) throw new OmacError("pack_mismatch", "source manifest pack_id does not match");
   const available = srcManifest.pack_version;
-  if (available === current) return { pack_id: packId, current, available, action: "no-op" };
-  if (!opts.apply) return { pack_id: packId, current, available, action: "upgrade-available" };
-  appendJsonl(join(ws.omac, "knowledge", "packs", ".versions.jsonl"), { pack_id: packId, version: current, available, installed_at: nowIso() });
+  const opId = `pkup-${nowIso().replace(/[^0-9]/g, "").slice(-12)}`;
+  if (available === current) {
+    appendJsonl(join(ws.omac, "knowledge", "packs", ".versions.jsonl"), {
+      pack_id: packId,
+      from: current,
+      to: available,
+      operation_id: opId,
+      installed_at: nowIso(),
+      result: "no-op",
+    } satisfies PackVersionAuditEntry);
+    return { pack_id: packId, current, available, action: "no-op" };
+  }
+  if (!opts.apply) {
+    appendJsonl(join(ws.omac, "knowledge", "packs", ".versions.jsonl"), {
+      pack_id: packId,
+      from: current,
+      to: available,
+      operation_id: opId,
+      installed_at: nowIso(),
+      result: "upgrade-available",
+    } satisfies PackVersionAuditEntry);
+    return { pack_id: packId, current, available, action: "upgrade-available" };
+  }
   rmSync(installed.dir, { recursive: true, force: true });
-  installPack(cwd, opts.source);
+  try {
+    installPack(cwd, opts.source);
+  } catch (e) {
+    appendJsonl(join(ws.omac, "knowledge", "packs", ".versions.jsonl"), {
+      pack_id: packId,
+      from: current,
+      to: available,
+      operation_id: opId,
+      installed_at: nowIso(),
+      result: "failed",
+      reason: (e as Error).message,
+    } satisfies PackVersionAuditEntry & { reason: string });
+    throw e;
+  }
+  appendJsonl(join(ws.omac, "knowledge", "packs", ".versions.jsonl"), {
+    pack_id: packId,
+    from: current,
+    to: available,
+    operation_id: opId,
+    installed_at: nowIso(),
+    result: "upgraded",
+  } satisfies PackVersionAuditEntry);
   return { pack_id: packId, current, available, action: "upgraded" };
 }

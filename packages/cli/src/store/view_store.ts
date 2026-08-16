@@ -31,6 +31,16 @@ export function rebuildView(cwd: string, input: RebuildInput): LearnerView {
   const scope = input.claimSet
     ? allClaims.filter((c) => input.claimSet!.includes(c.claim_id))
     : allClaims;
+  if (input.claimSet) {
+    const found = new Set(scope.map((c) => c.claim_id));
+    const missing = input.claimSet.filter((id) => !found.has(id));
+    if (missing.length > 0) {
+      throw new OmacError(
+        "claim_set_error",
+        `claim set references claims not found for learner '${input.learnerId}': ${missing.join(", ")}`
+      );
+    }
+  }
   const { claims } = selectClaims(scope);
   const view = computeView(ws.omac, input.learnerId, claims, reducerVersion);
   writeView(cwd, view);

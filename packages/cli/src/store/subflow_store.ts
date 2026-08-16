@@ -10,6 +10,10 @@ export function subflowsFile(omac: string): string {
 
 export function appendSubflow(cwd: string, subflow: SubflowRecord): SubflowRecord {
   const ws = requireWorkspace(cwd);
+  if (subflow.operation_id) {
+    const dup = listSubflows(cwd).find((s) => s.operation_id === subflow.operation_id);
+    if (dup) return dup;
+  }
   appendJsonl(subflowsFile(ws.omac), subflow);
   return subflow;
 }

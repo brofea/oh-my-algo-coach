@@ -59,6 +59,8 @@ export function createEvent(opts: {
   mode?: CoachingMode;
   platformProfileRef?: string;
   domainProfileRef?: string;
+  targetStatus?: "confirmed" | "provisional" | "unresolved";
+  artifactRef?: string;
   provenance: string;
   operationId?: string;
 }): EventRecord {
@@ -74,9 +76,11 @@ export function createEvent(opts: {
     platform_profile_ref: opts.platformProfileRef,
     domain_profile_ref: opts.domainProfileRef,
     target_ids: opts.targetIds,
+    target_status: opts.targetStatus,
     intent: opts.intent,
     problem_ref: opts.problemRef,
     contest_ref: opts.contestRef,
+    artifact_ref: opts.artifactRef,
     mode: opts.mode ?? (opts.eventType === "learn" ? "learn" : opts.eventType === "upsolve" ? "upsolve" : "practice"),
     status: "draft",
     provenance: opts.provenance,
@@ -120,21 +124,64 @@ export function setBoundaries(omac: string, eventId: string, boundaries: Indepen
   writeJson(join(dir, BOUNDARY_FILE), boundaries);
 }
 
+/**
+ * Append a new boundary snapshot. Snapshots are immutable: existing records are
+ * never rewritten. Retrying with the same boundary_id returns the original snapshot.
+ */
+export function appendBoundary(omac: string, eventId: string, boundary: IndependenceBoundary): IndependenceBoundary {
+  const dir = eventDir(omac, eventId);
+  if (!existsSync(join(dir, EVENT_FILE))) {
+    throw new OmacError("event_not_found", `event '${eventId}' not found in working dir`);
+  }
+  const snapshots = getBoundaries(omac, eventId);
+  const existing = snapshots.find((b) => b.boundary_id === boundary.boundary_id || (boundary.operation_id && b.operation_id === boundary.operation_id));
+  if (existing) return existing;
+  snapshots.push(boundary);
+  writeJson(join(dir, BOUNDARY_FILE), snapshots);
+  return boundary;
+}
+
 export function getBoundaries(omac: string, eventId: string): IndependenceBoundary[] {
-  const p = eventPath(omac, eventId, BOUNDARY_FILE);
-  if (!existsSync(p)) return [];
+  const p = eventFileAnywhere(omac, eventId, BOUNDARY_FILE);
+  if (!p) return [];
   return readJson<IndependenceBoundary[]>(p);
 }
 
-export function recordTransferProbe(omac: string, eventId: string, probe: TransferProbe): void {
+/**
+ * Resolve an event file (boundary.json / transfer-probes.jsonl / event.jsonl)
+ * across the working and archived locations, so closed events stay readable.
+ */
+export function eventFileAnywhere(omac: string, eventId: string, file: string): string | null {
+  const working = join(eventDir(omac, eventId), file);
+  if (existsSync(working)) return working;
+  const archived = join(archivedEventDir(omac, eventId), file);
+  if (existsSync(archived)) return archived;
+  return null;
+}
+
+export function getBoundary(omac: string, eventId: string, boundaryId: string): IndependenceBoundary {
+  const hit = getBoundaries(omac, eventId).find((b) => b.boundary_id === boundaryId);
+  if (!hit) {
+    const known = getBoundaries(omac, eventId).map((b) => b.boundary_id).join(", ") || "(none)";
+    throw new OmacError("boundary_not_found", `boundary snapshot '${boundaryId}' not found for event '${eventId}'; known snapshots: ${known}`);
+  }
+  return hit;
+}
+
+export function recordTransferProbe(omac: string, eventId: string, probe: TransferProbe): { probe: TransferProbe; resumed: boolean } {
   const dir = eventDir(omac, eventId);
   ensureDir(dir);
+  if (probe.operation_id) {
+    const existing = getTransferProbes(omac, eventId).find((p) => p.operation_id === probe.operation_id);
+    if (existing) return { probe: existing, resumed: true };
+  }
   appendJsonl(join(dir, TRANSFER_FILE), probe);
+  return { probe, resumed: false };
 }
 
 export function getTransferProbes(omac: string, eventId: string): TransferProbe[] {
-  const p = eventPath(omac, eventId, TRANSFER_FILE);
-  if (!existsSync(p)) return [];
+  const p = eventFileAnywhere(omac, eventId, TRANSFER_FILE);
+  if (!p) return [];
   return readJsonl<TransferProbe>(p);
 }
 
@@ -190,8 +237,8 @@ function readDirSafe(p: string): string[] {
 }
 
 export function eventLog(omac: string, eventId: string): unknown[] {
-  const p = eventPath(omac, eventId, EVENT_LOG);
-  if (!existsSync(p)) return [];
+  const p = eventFileAnywhere(omac, eventId, EVENT_LOG);
+  if (!p) return [];
   return readJsonl(p);
 }
 

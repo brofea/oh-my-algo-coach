@@ -36,9 +36,13 @@ export function artifactsFile(omac: string): string {
 
 export function addArtifact(
   cwd: string,
-  opts: { eventId: string; kind: ArtifactRecord["kind"]; filePath: string; relPath: string; checksum: string }
+  opts: { eventId: string; kind: ArtifactRecord["kind"]; filePath: string; relPath: string; checksum: string; operationId?: string }
 ): ArtifactRecord {
   const ws = requireWorkspace(cwd);
+  if (opts.operationId) {
+    const dup = listArtifacts(cwd).find((a) => a.operation_id === opts.operationId);
+    if (dup) return dup;
+  }
   const record: ArtifactRecord = {
     artifact_id: `art-${shortId("a").slice(4)}`,
     event_id: opts.eventId,
@@ -46,6 +50,7 @@ export function addArtifact(
     file_path: opts.filePath,
     rel_path: opts.relPath,
     sha256: opts.checksum,
+    operation_id: opts.operationId,
     added_at: nowIso(),
   };
   appendJsonl(artifactsFile(ws.omac), record);

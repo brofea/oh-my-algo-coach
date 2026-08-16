@@ -1,8 +1,9 @@
 import { readdirSync } from "node:fs";
 import { OmacError } from "../core/ids.js";
-import { TargetContract, IndependenceBoundary, CoachingMode } from "../core/types.js";
+import { TargetContract, IndependenceBoundary, CoachingMode, PackSource, PackLicense } from "../core/types.js";
 import { readJson, writeJson, jsonExists } from "../store/jsonl.js";
 import { omacPath, requireWorkspace } from "../store/workspace.js";
+import { listTargetPackCards } from "../services/memory.js";
 
 export const TARGET_VERSION = "1.0.0";
 
@@ -90,6 +91,15 @@ const BUILTIN_TARGETS: TargetContract[] = [
   },
 ];
 
+export interface TargetProvenance {
+  target_id: string;
+  version: string;
+  pack_id?: string;
+  pack_version?: string;
+  source?: PackSource;
+  license?: PackLicense;
+}
+
 export function listTargets(cwd: string): TargetContract[] {
   const ws = requireWorkspace(cwd);
   const packTargets: TargetContract[] = [];
@@ -113,15 +123,50 @@ export function listTargets(cwd: string): TargetContract[] {
       }
     }
   }
+  for (const ref of listTargetPackCards(cwd)) {
+    const t = ref.card;
+    if (!t?.target_id) continue;
+    if (!known.has(t.target_id)) {
+      known.add(t.target_id);
+      packTargets.push(t);
+    }
+  }
   return packTargets;
 }
 
 export function getTarget(cwd: string, targetId: string): TargetContract {
-  const t = listTargets(cwd).find((x) => x.target_id === targetId);
+  const all = listTargets(cwd);
+  const t = all.find((x) => x.target_id === targetId);
   if (!t) {
-    throw new OmacError("target_not_found", `target contract '${targetId}' not found`);
+    const known = all.map((x) => x.target_id).join(", ") || "(none registered)";
+    throw new OmacError("target_not_found", `target contract '${targetId}' not found; known targets: ${known}`);
   }
   return t;
+}
+
+export function targetProvenance(cwd: string, targetId: string): TargetProvenance | null {
+  const builtin = BUILTIN_TARGETS.find((t) => t.target_id === targetId);
+  if (builtin) return { target_id: targetId, version: builtin.target_version, source: { type: "builtin" } };
+  for (const ref of listTargetPackCards(cwd)) {
+    if (ref.card.target_id === targetId) {
+      return {
+        target_id: targetId,
+        version: ref.card.target_version ?? ref.pack_version,
+        pack_id: ref.pack_id,
+        pack_version: ref.pack_version,
+        source: ref.source,
+        license: ref.license,
+      };
+    }
+  }
+  const ws = requireWorkspace(cwd);
+  const knowledgeDir = omacPath(cwd, "knowledge", "targets");
+  const local = listTargets(cwd).find((t) => t.target_id === targetId);
+  void ws;
+  if (local) {
+    return { target_id: targetId, version: local.target_version, source: { type: "local", uri: `${knowledgeDir}/${targetId.replace(/[^a-zA-Z0-9.-]/g, "_")}.json` } };
+  }
+  return null;
 }
 
 export function writeTarget(cwd: string, target: TargetContract): void {
@@ -132,7 +177,7 @@ export function writeTarget(cwd: string, target: TargetContract): void {
 export function defaultBoundary(cwd: string, targetId: string): IndependenceBoundary {
   const t = getTarget(cwd, targetId);
   return {
-    boundary_id: `bnd-${Date.now().toString(36)}`,
+    boundary_id: `bnd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     ...t.independence_boundary_defaults,
     captured_at: new Date().toISOString(),
   };
