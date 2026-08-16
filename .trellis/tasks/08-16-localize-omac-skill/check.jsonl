@@ -1,0 +1,3 @@
+{"file":"docs/PRD.md","reason":"按 PRD 检查中文化没有删减或改变核心产品契约。"}
+{"file":"skill/omac/references/event-protocol.md","reason":"检查正文对 Event Type、生命周期、Boundary 和 Claim 门禁的引用保持一致。"}
+{"file":"skill/omac/references/cli-protocol.md","reason":"检查命令名、参数名和 Runtime 术语未被误翻译。"}

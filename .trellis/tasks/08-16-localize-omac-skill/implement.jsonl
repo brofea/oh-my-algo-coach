@@ -1,0 +1,3 @@
+{"file":"docs/PRD.md","reason":"确认中文 Skill 文案仍完整覆盖 OMAC 的产品目标、六类 Event、教学原则和 CLI 边界。"}
+{"file":"skill/omac/references/event-protocol.md","reason":"保留与参考协议一致的 Event、Evidence、Claim 术语和链接。"}
+{"file":"skill/omac/references/cli-protocol.md","reason":"保留 CLI 命令、字段和运行时安全边界的精确拼写。"}
