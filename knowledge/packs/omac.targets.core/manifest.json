@@ -1,10 +1,11 @@
 {
   "pack_id": "omac.targets.core",
   "pack_version": "1.0.0",
+  "schema_version": "1.0",
   "name": "Core Target Contracts",
   "kind": "target",
-  "source_type": "omac-created",
-  "license": "MIT",
+  "source": { "type": "omac-created" },
+  "license": { "id": "MIT", "notice": "OMAC core target contracts" },
   "content_files": [
     "targets/skill.problem-solving.state-design.json",
     "targets/algo.binary-search-on-answer.json"

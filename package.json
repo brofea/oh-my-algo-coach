@@ -9,7 +9,8 @@
   "scripts": {
     "build": "npm run build -w @omac/cli",
     "test": "npm run test -w @omac/cli",
-    "typecheck": "npm run typecheck -w @omac/cli"
+    "typecheck": "npm run typecheck -w @omac/cli",
+    "lint": "npm run typecheck && node scripts/check-packs.mjs"
   },
   "engines": {
     "node": ">=22"

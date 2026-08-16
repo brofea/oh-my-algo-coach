@@ -1,0 +1,9 @@
+{
+  "pedagogy_id": "pedagogy.active-retrieval",
+  "name": "Active Retrieval with Spacing",
+  "description": "通过主动回忆（不直接给答案）配合间隔复习巩固技能；样本不足时降低结论强度，不输出伪精确估计",
+  "strategy": "先让学习者尝试回忆，再按 Hint Ladder 逐级给提示；复习间隔由 retention model 决定；低样本时状态标为 insufficient_evidence",
+  "related_targets": ["algo.dp", "algo.binary-search-on-answer", "skill.problem-solving.state-design"],
+  "evidence_basis": "spaced repetition + retrieval practice (offline heuristic baseline; not causal)",
+  "version": "1.0.0"
+}

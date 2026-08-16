@@ -1,0 +1,11 @@
+{
+  "pack_id": "omac.pedagogy.core",
+  "pack_version": "1.0.0",
+  "schema_version": "1.0",
+  "name": "Core Pedagogy Strategies",
+  "kind": "pedagogy",
+  "source": { "type": "omac-created" },
+  "license": { "id": "MIT", "notice": "OMAC core pedagogy cards" },
+  "content_files": ["pedagogy/active-retrieval.json"],
+  "description": "代表性教学策略卡片：复习、间隔、主动回忆与低样本不确定性处理"
+}

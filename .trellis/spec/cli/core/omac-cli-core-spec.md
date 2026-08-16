@@ -42,9 +42,21 @@ omac doctor | integrity | migrate | export --learner-id <id> | import <pkg> [--p
 | `schema_mismatch` | workspace schema_version 与运行时不符 |
 | `invalid_transition` | 非法 status 迁移 |
 | `invalid_claim` | claim 提交于非 evaluating 或已归档事件 |
-| `contest_gate` | contest 缺 artifact / 未确认结束 / 声明 live |
+| `contest_gate` | contest 缺 artifact / 未确认结束 / 声明 live / 缺 target / provisional target |
 | `confirmation_required` | purge 无 --confirm |
 | `validation_error` | 字段缺失/非法 |
+| `target_not_found` | Event 声明的 Target 无法从 canonical loader 解析（附已知列表） |
+| `boundary_required` | independent/transferred/retained claim 缺 boundary-id |
+| `boundary_not_found` | evidence/claim 引用不存在的 boundary snapshot |
+| `evidence_not_found` / `evidence_mismatch` | claim 引用缺失 Evidence / 跨 Event 或 Learner |
+| `event_closed` | 已关闭/已归档 Event 追加普通 Evidence |
+| `correction_gate` | correction 缺 operation-id / supersedes / reason |
+| `diagnose_confirmation_required` | diagnose claim 未带 `--student-confirmation confirmed` |
+| `claim_set_error` | rebuild --claim-set 引用不存在或不属于该 Learner 的 claim |
+| `invalid_pack` / `pack_exists` | pack manifest 非法 / 已安装 |
+| `pattern_not_found` / `misconception_not_found` / `pedagogy_not_found` / `algorithm_not_found` | 未知 Card ID（附已知列表） |
+| `migration_path` / `migration_failed` | 无迁移路径 / 迁移 apply 失败（保留原数据） |
+| `import_conflict` | reject 策略下发现重复记录 |
 
 ## 5. Good / Base / Bad Cases
 
@@ -182,3 +194,64 @@ omac pack versions <pack-id>
 - gain-matrix：Student × Problem Type × Difficulty × Intervention 聚合，方向来自关联 claim 变化。
 - Visualize：Runtime 服务输出 {kind,title,body}（ASCII），Skill 不放 Script。
 - Pack 版本治理：update 默认 dry-run（upgrade-available），--apply 才删除旧目录并重装，.versions.jsonl 审计（含 from/to）。
+
+## 13. V5.1 追加（Contract Gates / Pack Loader / Governance）
+
+### 新命令
+
+```
+omac event boundary set --event-id <id> --target-id <t> | --boundary <json> [--operation-id]
+omac event boundary list --event-id <id>
+omac transfer-probe rate [--time-window-days <n>] [--min-samples <n>] [--learner-id <id>]
+omac pattern list|get <id> | misconception list|get <id> | pedagogy list|get <id> | algorithm list|get <id>
+```
+
+### 契约
+
+- **Target 校验**：所有 Event 声明的 Target 必须从 canonical loader 解析（builtin → `.omac/knowledge/targets/*.json` → 已安装 pack 的 target cards）；Explore 可无 Target；Practice 可 `--target-status provisional|unresolved|confirmed`（持久化到 EventRecord.target_status）；Contest 必须 ≥1 个 confirmed Target。
+- **Boundary 快照**：`event/<id>/boundary.json` 为 append-only 快照数组；更新只追加，不改写历史；Event 保存当前 `independence_boundary_ref`；Evidence / Claim 用 `--boundary-id` 绑定（必须属于该 Event 的快照）；independent/transferred/retained claim 缺 boundary 直接拒绝。
+- **Contest Artifact**：`--artifact` 必须存在、普通文件、非空；复制到 `.omac/artifact/`，写 ArtifactRecord（event_id 关联），Event 保存 `artifact_ref`。
+- **关闭门禁**：closed/cancelled/archived Event 拒绝普通 Evidence；correction 需 `--operation-id --supercedes <ids> --reason`，且被修正记录必须属于同一 Event。
+- **Diagnose 门禁**：diagnose Event 的 claim 必须 `--student-confirmation confirmed`，否则 `diagnose_confirmation_required`；确认前不触碰 Learner State。
+- **Claim 完整性**：evidence-ids 必须存在且属于当前 Learner + Event；rebuild --claim-set 引用未知 claim 显式报 `claim_set_error`。
+- **Pack Loader**：manifest 支持 canonical（`source:{type,uri?,retrieved_at?}`、`license:{id,notice?}`、`schema_version`、`content_files`）与 legacy 平铺格式（`license` 字符串等），normalize 后统一消费；card 可单对象或 `{<kind>s:[...]}` 包装；安装校验 kind + content_files 存在。
+- **迁移**：MIGRATIONS 注册表（0.9.0→1.0.0：事件 schema_version stamp + archive index backfill）；用 `readWorkspaceConfigLoose` 读取旧配置；config 写入先临时文件再原子 rename；失败保留原数据；迁移后跑 integrity。
+- **Export/Import 保真**：export 含 event-extra（boundary/transfer-probes/event.jsonl）、artifacts.jsonl + artifact-files、views.jsonl、retention、learn-paths、packs 引用；import 按 archive_ref 恢复 archived 目录与 index，保留原始 ID（evidence/claim 不得重新生成 ID），冲突默认拒绝（reject/merge/new-learner），结束后跑 integrity。
+- **Purge 全量**：profile/event(working+archive)/evidence/claims/views/reports/artifact index+文件/subflow/retention/learn-paths/contest 分析/index；完成后返回 integrity 结果。
+- **V5 指标**：每个报告输出 `status(ok|insufficient_evidence)`、`sample_size`、`source`、`uncertainty`；无数据 = insufficient，不是 0 或 error。
+- **Transfer Rate**：分母 = 确认 Target + Boundary 快照 + novelty 声明 + 独立模式（independent-success/fail）+ 完整结果的 probe；分子 = independent-success；< min_samples（默认 3）→ `insufficient_evidence` + value=null，附排除原因。
+- **Pack 版本审计**：`.versions.jsonl` 每行 `{pack_id, from, to, operation_id, installed_at, result}`（result ∈ no-op|upgrade-available|upgraded|failed），可重放。
+
+## 14. V5.2 追加（Acceptance Fixes）
+
+### 归档事件统一读取
+
+- `getBoundaries` / `getTransferProbes` / `eventLog`（`store/event_store.ts`）通过 `eventFileAnywhere` 同时解析工作目录与归档目录；`event boundary list` / `report` / transfer metrics 对已关闭事件保持可读。
+
+### Purge 与 Integrity
+
+- Purge 追加：`learner/profile/<id>*`、`learner/state/problem-status.jsonl`（按 event 归属过滤）、`report/event-<id>.md`、`artifact/contest/<contest_ref>.json`。
+- `integrityCheck` 追加：event index 重复项与 archived 状态一致性、claim/evidence 的 boundary 引用存在性、artifact 索引事件引用 + 文件存在性（warning）、purge 残留（problem-status/learn-paths/subflows 的孤儿 event 引用，warning）。
+
+### Target 一致性
+
+- claim `--target-id`、transfer-probe `--target-id`、evidence `--target-ids` 必须 ⊆ event.target_ids，否则 `target_mismatch`（`misconception.*` scope 豁免；Explore 允许空 target）。
+
+### V5 统一元数据
+
+- retention list/schedule/recall/model-status、coach eval/policy、plan、pack update/versions 均输出 `meta: {status, sample_size, source, uncertainty?}`（或顶层同名字段）；无数据 → `insufficient_evidence`。
+
+### 内置 Pack
+
+- `installedPacks` 合并 builtin registry（`knowledge/packs/`，解析自模块路径，可用 `OMAC_BUILTIN_PACKS` 覆盖）与 `.omac/knowledge/packs/`，已安装优先；`pack list` 输出 `builtin` 标记；`pack install` 只与已安装（非 builtin）判重；`pack update` 拒绝 builtin 包。
+
+### operation_id 幂等
+
+- `event boundary set`（按 boundary_id 或 operation_id）、`transfer-probe add`、`subflow add`、`artifact add` 支持 `--operation-id` 幂等重试（返回原记录 + `resumed:true`）。
+
+### 其余
+
+- `target get <id>` 新命令（带 provenance）。
+- `event create --type contest` 复用 `validateArtifact`（contest.id/platform/problems 非空/verdict 合法）。
+- 迁移失败回滚：apply 前快照将修改的 event.json 与 index 文件，失败时恢复并报 `migration_failed ... rolled back`。
+- import merge 写入归档索引前检查 index 中是否已存在（防重复）。

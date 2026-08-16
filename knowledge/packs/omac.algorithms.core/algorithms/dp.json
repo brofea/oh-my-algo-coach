@@ -1,0 +1,11 @@
+{
+  "algorithm_id": "algo.dp",
+  "name": "Dynamic Programming",
+  "category": "algorithm",
+  "description": "把原问题分解为重叠子问题，用状态与转移递推求解，要求最优子结构",
+  "prerequisites": ["concept.recursion", "concept.complexity.big-o", "concept.optimal-substructure"],
+  "complexity": "O(states * transition_cost)",
+  "variants": ["iterative", "memoization", "state-compression", "dp-on-trees"],
+  "related_targets": ["algo.dp", "skill.problem-solving.state-design"],
+  "version": "1.0.0"
+}

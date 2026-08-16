@@ -1,9 +1,10 @@
 {
   "pack_id": "omac.patterns.offline-processing",
   "pack_version": "1.0.0",
+  "schema_version": "1.0",
   "name": "Offline Processing Patterns",
   "kind": "pattern",
-  "source_type": "omac-created",
-  "license": "MIT",
+  "source": { "type": "omac-created" },
+  "license": { "id": "MIT" },
   "content_files": ["patterns/distinct-elements-in-range.json", "prerequisites.json"]
 }

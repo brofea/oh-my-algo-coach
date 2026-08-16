@@ -1,0 +1,11 @@
+{
+  "pack_id": "omac.algorithms.core",
+  "pack_version": "1.0.0",
+  "schema_version": "1.0",
+  "name": "Core Algorithm Cards",
+  "kind": "algorithm",
+  "source": { "type": "omac-created" },
+  "license": { "id": "MIT", "notice": "OMAC core algorithm cards" },
+  "content_files": ["algorithms/dp.json"],
+  "description": "代表性 Algorithm Graph 卡片，作为可版本化的算法知识包基线"
+}
