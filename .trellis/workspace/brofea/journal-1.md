@@ -170,3 +170,36 @@ V4: contest artifact import+integrity, timeline, 6-way loss attribution, contest
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: V5 Adaptive Coaching Research & Ecosystem
+
+**Date**: 2026-08-16
+**Task**: V5 Adaptive Coaching Research & Ecosystem
+**Branch**: `main`
+
+### Summary
+
+V5: rating/calibration, advanced retention decay, coach self-eval + policy + gain matrix, visualization, long-term plan, pack version governance. 50/50 tests
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `666e48116d8affaa7d6826ffbc0f6657e9fed4bd` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "docs/PRD.md", "reason": "权威需求：V0 全部约束、Event/Evidence/Claim 字段、.omac 布局、Locked 决策"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "跨层思考：CLI 命令→store→reducer 数据流"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "减少重复：字段类型与校验逻辑复用"}
