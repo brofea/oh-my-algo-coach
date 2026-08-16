@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { omac, makeWorkspace, cleanup, newEvent, appendEvidence } from "./helpers.js";
+import { omac, makeWorkspace, cleanup, newEvent, appendEvidence, setBoundary } from "./helpers.js";
 import { writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -100,7 +100,8 @@ test("V1.5: algorithm / problem-solving / misconception views computed from clai
     omac(dir, ["event", "append", "--event-id", ev1, "--status", "active"]);
     omac(dir, ["event", "append", "--event-id", ev1, "--status", "evaluating"]);
     omac(dir, ["learner", "claim", "submit", "--event-id", ev1, "--skill-id", "algo.dp", "--target-id", "misconception.dp.state-too-large", "--assessment", "observed", "--confidence", "0.6"]);
-    omac(dir, ["learner", "claim", "submit", "--event-id", ev1, "--skill-id", "algo.dp", "--claim-scope", "recall", "--assessment", "independent", "--confidence", "0.7"]);
+    const bnd = setBoundary(dir, ev1, "algo.dp");
+    omac(dir, ["learner", "claim", "submit", "--event-id", ev1, "--skill-id", "algo.dp", "--claim-scope", "recall", "--assessment", "independent", "--confidence", "0.7", "--boundary-id", bnd]);
     omac(dir, ["learner", "claim", "submit", "--event-id", ev1, "--skill-id", "skill.problem-solving.state-design", "--assessment", "assisted", "--confidence", "0.5"]);
     omac(dir, ["event", "close", "--event-id", ev1]);
     const algo = omac(dir, ["view", "algorithm"]);
@@ -154,7 +155,8 @@ test("V1.6: assisted vs independent results remain distinct across coaching view
     const ev2 = newEvent(dir, "upsolve", ["--target-ids", "algo.greedy"]);
     omac(dir, ["event", "append", "--event-id", ev2, "--status", "active"]);
     omac(dir, ["event", "append", "--event-id", ev2, "--status", "evaluating"]);
-    omac(dir, ["learner", "claim", "submit", "--event-id", ev2, "--skill-id", "algo.greedy", "--assessment", "independent", "--confidence", "0.7"]);
+    const bnd2 = setBoundary(dir, ev2, "algo.greedy");
+    omac(dir, ["learner", "claim", "submit", "--event-id", ev2, "--skill-id", "algo.greedy", "--assessment", "independent", "--confidence", "0.7", "--boundary-id", bnd2]);
     omac(dir, ["event", "close", "--event-id", ev2]);
     const algo = omac(dir, ["view", "algorithm"]);
     const entry = (algo.stdout as { view: { entries: { overall: string }[] } }).view.entries[0];

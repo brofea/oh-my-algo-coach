@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { omac, makeWorkspace, cleanup, newEvent, appendEvidence } from "./helpers.js";
+import { omac, makeWorkspace, cleanup, newEvent, appendEvidence, setBoundary } from "./helpers.js";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -34,8 +34,9 @@ test("V0.2: full lifecycle practice event -> close -> archive -> rebuild -> next
     omac(dir, ["event", "append", "--event-id", evId, "--status", "active"]);
     const e1 = appendEvidence(dir, evId, "student independently observed the monotonicity of feasibility", "op-e1", ["--actor", "coach", "--type", "observation"]);
     const e2 = appendEvidence(dir, evId, "student requested first hint after 17 minutes", "op-e2", ["--actor", "learner", "--type", "observation"]);
+    const bnd = setBoundary(dir, evId, "skill.problem-solving.state-design");
     omac(dir, ["event", "append", "--event-id", evId, "--status", "evaluating"]);
-    const claim = omac(dir, ["learner", "claim", "submit", "--event-id", evId, "--skill-id", "skill.problem-solving.state-design", "--assessment", "independent", "--confidence", "0.7", "--evidence-ids", `${e1},${e2}`, "--operation-id", "op-claim-1"]);
+    const claim = omac(dir, ["learner", "claim", "submit", "--event-id", evId, "--skill-id", "skill.problem-solving.state-design", "--assessment", "independent", "--confidence", "0.7", "--evidence-ids", `${e1},${e2}`, "--boundary-id", bnd, "--operation-id", "op-claim-1"]);
     assert.equal(claim.ok, true, claim.stderr);
     const claimId = (claim.stdout as { claim_id: string }).claim_id;
     const close = omac(dir, ["event", "close", "--event-id", evId, "--operation-id", "op-close-1"]);
@@ -125,11 +126,12 @@ test("V0.5: user correction -> reevaluate -> rebuild; history never rewritten", 
     const evId = newEvent(dir, "practice", ["--target-ids", "skill.problem-solving.state-design"]);
     omac(dir, ["event", "append", "--event-id", evId, "--status", "active"]);
     const e1 = appendEvidence(dir, evId, "student solved quickly", "op-c1");
+    const bnd = setBoundary(dir, evId, "skill.problem-solving.state-design");
     omac(dir, ["event", "append", "--event-id", evId, "--status", "evaluating"]);
-    const claim1 = omac(dir, ["learner", "claim", "submit", "--event-id", evId, "--skill-id", "skill.problem-solving.state-design", "--assessment", "independent", "--confidence", "0.8", "--evidence-ids", e1, "--operation-id", "op-cc1"]);
+    const claim1 = omac(dir, ["learner", "claim", "submit", "--event-id", evId, "--skill-id", "skill.problem-solving.state-design", "--assessment", "independent", "--confidence", "0.8", "--evidence-ids", e1, "--boundary-id", bnd, "--operation-id", "op-cc1"]);
     const claimId1 = (claim1.stdout as { claim_id: string }).claim_id;
     omac(dir, ["event", "close", "--event-id", evId]);
-    const correction = omac(dir, ["evidence", "append", "--event-id", evId, "--type", "correction", "--content", "user correction: student had seen the editorial before", "--actor", "learner", "--operation-id", "op-cc2"]);
+    const correction = omac(dir, ["evidence", "append", "--event-id", evId, "--type", "correction", "--content", "user correction: student had seen the editorial before", "--actor", "learner", "--operation-id", "op-cc2", "--supercedes", e1, "--reason", "student had seen the editorial before"]);
     assert.equal(correction.ok, true, correction.stderr);
     const re = omac(dir, ["reevaluate", "--event-id", evId, "--evaluation-run-id", "run-2", "--assessment", "assisted", "--confidence", "0.5"]);
     assert.equal(re.ok, true, re.stderr);
@@ -177,14 +179,14 @@ test("V0.7: contest event gate - requires artifact + user confirmation, refuses 
     assert.equal(noArtifact.ok, false);
     assert.match(noArtifact.stderr, /artifact/);
     const artifact = join(dir, "contest-artifact.json");
-    writeFileSync(artifact, JSON.stringify({ contest: { id: "abc389", platform: "atcoder" } }));
+    writeFileSync(artifact, JSON.stringify({ contest: { id: "abc389", platform: "atcoder" }, problems: [{ problem_ref: "abc389:A", submissions: [{ minutes_used: 20, verdict: "AC" }] }] }));
     const noConfirm = omac(dir, ["event", "create", "--type", "contest", "--artifact", artifact]);
     assert.equal(noConfirm.ok, false);
     assert.match(noConfirm.stderr, /confirm-ended|ended/);
     const live = omac(dir, ["event", "create", "--type", "contest", "--artifact", artifact, "--confirm-ended", "--live"]);
     assert.equal(live.ok, false);
     assert.match(live.stderr, /post-contest|not supported/i);
-    const okCreate = omac(dir, ["event", "create", "--type", "contest", "--artifact", artifact, "--confirm-ended", "--contest-ref", "abc389"]);
+    const okCreate = omac(dir, ["event", "create", "--type", "contest", "--artifact", artifact, "--confirm-ended", "--contest-ref", "abc389", "--target-ids", "algo.dp"]);
     assert.equal(okCreate.ok, true, okCreate.stderr);
   } finally {
     cleanup(dir);
@@ -264,8 +266,9 @@ test("V0.11: conformance fixture matrix - two platform profiles and two event ty
     for (const [id, skill, assessment] of [[cf, "algo.binary-search-on-answer", "independent"], [lc, "algo.dp", "observed"]] as const) {
       omac(dir, ["event", "append", "--event-id", id, "--status", "active"]);
       const evd = appendEvidence(dir, id, `evidence for ${skill}`, `op-${id}`);
+      const bnd = assessment === "independent" ? setBoundary(dir, id, skill) : "";
       omac(dir, ["event", "append", "--event-id", id, "--status", "evaluating"]);
-      omac(dir, ["learner", "claim", "submit", "--event-id", id, "--skill-id", skill, "--assessment", assessment, "--confidence", "0.6", "--evidence-ids", evd]);
+      omac(dir, ["learner", "claim", "submit", "--event-id", id, "--skill-id", skill, "--assessment", assessment, "--confidence", "0.6", "--evidence-ids", evd, ...(bnd ? ["--boundary-id", bnd] : [])]);
       omac(dir, ["event", "close", "--event-id", id]);
     }
     omac(dir, ["rebuild"]);

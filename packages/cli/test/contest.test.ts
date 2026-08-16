@@ -46,7 +46,7 @@ test("V4.2: timeline computation from artifact", () => {
       { problem_ref: "abc389:B", rating: 800, opened_minutes: 25, submissions: [] },
     ], { abandons: [{ problem_ref: "abc389:B", at_minutes: 60 }] });
     omac(dir, ["contest", "import", "--artifact", art]);
-    const evId = (omac(dir, ["event", "create", "--type", "contest", "--artifact", art, "--confirm-ended", "--contest-ref", "abc389"]).stdout as { event_id: string }).event_id;
+    const evId = (omac(dir, ["event", "create", "--type", "contest", "--artifact", art, "--confirm-ended", "--contest-ref", "abc389", "--target-ids", "algo.dp"]).stdout as { event_id: string }).event_id;
     const r = omac(dir, ["contest", "timeline", "--event-id", evId]);
     assert.equal(r.ok, true, r.stderr);
     const tl = (r.stdout as { timeline: { problem_ref: string; ac_minutes: number; submissions: unknown[] }[] }).timeline;
@@ -70,7 +70,7 @@ test("V4.3: loss attribution distinguishes the five causes", () => {
       { problem_ref: "p5", rating: 900, opened_minutes: 40, submissions: [] },
     ], { abandons: [{ problem_ref: "p2", at_minutes: 75 }, { problem_ref: "p5", at_minutes: 60 }] });
     omac(dir, ["contest", "import", "--artifact", art]);
-    const evId = (omac(dir, ["event", "create", "--type", "contest", "--artifact", art, "--confirm-ended", "--contest-ref", "abc389"]).stdout as { event_id: string }).event_id;
+    const evId = (omac(dir, ["event", "create", "--type", "contest", "--artifact", art, "--confirm-ended", "--contest-ref", "abc389", "--target-ids", "algo.dp"]).stdout as { event_id: string }).event_id;
     const r = omac(dir, ["contest", "analyze", "--event-id", evId]);
     assert.equal(r.ok, true, r.stderr);
     const analysis = (r.stdout as { analysis: { attributions: { problem_ref: string; cause?: string }[]; summary: { primary_cause?: string } } }).analysis;
@@ -95,7 +95,7 @@ test("V4.4: contest ability view aggregates analyses", () => {
       { problem_ref: "p2", rating: 1400 },
     ]);
     omac(dir, ["contest", "import", "--artifact", art]);
-    const evId = (omac(dir, ["event", "create", "--type", "contest", "--artifact", art, "--confirm-ended", "--contest-ref", "abc389"]).stdout as { event_id: string }).event_id;
+    const evId = (omac(dir, ["event", "create", "--type", "contest", "--artifact", art, "--confirm-ended", "--contest-ref", "abc389", "--target-ids", "algo.dp"]).stdout as { event_id: string }).event_id;
     omac(dir, ["contest", "analyze", "--event-id", evId]);
     const view = omac(dir, ["view", "contest"]);
     assert.equal(view.ok, true, view.stderr);
@@ -119,7 +119,7 @@ test("V4.5: upsolve linking and followup suggestions", () => {
       { problem_ref: "p2", rating: 1400 },
     ]);
     omac(dir, ["contest", "import", "--artifact", art]);
-    const contestEv = (omac(dir, ["event", "create", "--type", "contest", "--artifact", art, "--confirm-ended", "--contest-ref", "abc389"]).stdout as { event_id: string }).event_id;
+    const contestEv = (omac(dir, ["event", "create", "--type", "contest", "--artifact", art, "--confirm-ended", "--contest-ref", "abc389", "--target-ids", "algo.dp"]).stdout as { event_id: string }).event_id;
     const upsolveEv = (omac(dir, ["event", "create", "--type", "upsolve", "--problem-ref", "p2"]).stdout as { event_id: string }).event_id;
     const link = omac(dir, ["contest", "link-upsolve", "--event-id", contestEv, "--upsolve-event", upsolveEv, "--problem-ref", "p2"]);
     assert.equal(link.ok, true, link.stderr);

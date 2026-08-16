@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { omac, makeWorkspace, cleanup, newEvent } from "./helpers.js";
+import { omac, makeWorkspace, cleanup, newEvent, setBoundary } from "./helpers.js";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -9,7 +9,8 @@ function seedView(dir: string, skills: [string, string, number][]): void {
     const evId = newEvent(dir, "practice", ["--target-ids", skill]);
     omac(dir, ["event", "append", "--event-id", evId, "--status", "active"]);
     omac(dir, ["event", "append", "--event-id", evId, "--status", "evaluating"]);
-    omac(dir, ["learner", "claim", "submit", "--event-id", evId, "--skill-id", skill, "--assessment", assessment, "--confidence", String(confidence)]);
+    const bnd = ["independent", "transferred", "retained"].includes(assessment) ? setBoundary(dir, evId, skill) : "";
+    omac(dir, ["learner", "claim", "submit", "--event-id", evId, "--skill-id", skill, "--assessment", assessment, "--confidence", String(confidence), ...(bnd ? ["--boundary-id", bnd] : [])]);
     omac(dir, ["event", "close", "--event-id", evId]);
   }
   omac(dir, ["rebuild"]);
@@ -64,7 +65,8 @@ test("V5.3: coach eval distinguishes gains and marks insufficient samples", () =
     omac(dir, ["event", "append", "--event-id", ev2, "--status", "active"]);
     omac(dir, ["evidence", "append", "--event-id", ev2, "--type", "intervention", "--intervention-type", "counterexample", "--hint-level", "L2", "--target-ids", "algo.greedy", "--operation-id", "op-i2"]);
     omac(dir, ["event", "append", "--event-id", ev2, "--status", "evaluating"]);
-    omac(dir, ["learner", "claim", "submit", "--event-id", ev2, "--skill-id", "algo.greedy", "--target-id", "algo.greedy", "--assessment", "independent", "--confidence", "0.7"]);
+    const bnd = setBoundary(dir, ev2, "algo.greedy");
+    omac(dir, ["learner", "claim", "submit", "--event-id", ev2, "--skill-id", "algo.greedy", "--target-id", "algo.greedy", "--assessment", "independent", "--confidence", "0.7", "--boundary-id", bnd]);
     omac(dir, ["event", "close", "--event-id", ev2]);
     const r = omac(dir, ["coach", "eval", "--target", "algo.greedy", "--min-events", "3"]);
     assert.equal(r.ok, true, r.stderr);

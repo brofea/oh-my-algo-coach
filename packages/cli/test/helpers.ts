@@ -59,3 +59,9 @@ export function appendEvidence(cwd: string, eventId: string, content: string, op
   assert.equal(r.ok, true, `evidence append failed: ${r.stderr}`);
   return (r.stdout as { evidence_id: string }).evidence_id;
 }
+
+export function setBoundary(cwd: string, eventId: string, targetId: string): string {
+  const r = omac(cwd, ["event", "boundary", "set", "--event-id", eventId, "--target-id", targetId]);
+  assert.equal(r.ok, true, `boundary set failed: ${r.stderr}`);
+  return (r.stdout as { boundary: { boundary_id: string } }).boundary.boundary_id;
+}

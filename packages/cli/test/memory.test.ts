@@ -24,12 +24,35 @@ test("V2.1: knowledge pack install/list/prereq", () => {
     assert.equal(dup.ok, false);
     assert.match(dup.stderr, /already installed/);
     const list = omac(dir, ["pack", "list"]);
-    const packs = (list.stdout as { packs: { pack_id: string }[] }).packs;
-    assert.equal(packs.length, 1);
-    assert.equal(packs[0].pack_id, "omac.ds.segment-tree");
+    const packs = (list.stdout as { packs: { pack_id: string; builtin: boolean }[] }).packs;
+    assert.ok(packs.some((p) => p.pack_id === "omac.ds.segment-tree" && p.builtin === false), "installed pack must be listed as non-builtin");
     const prereq = omac(dir, ["pack", "prereq", "algo.segment-tree"]);
     const p = prereq.stdout as { prerequisites: string[] };
     assert.deepEqual(p.prerequisites, ["algo.binary-search.basic", "data-structure.array"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("V2.10: builtin registry packs auto-load in a clean workspace", () => {
+  const dir = makeWorkspace();
+  try {
+    omac(dir, ["init", "--learner-id", "ln-builtin"]);
+    const list = omac(dir, ["pack", "list"]);
+    assert.equal(list.ok, true, list.stderr);
+    const packs = (list.stdout as { packs: { pack_id: string; builtin: boolean }[] }).packs;
+    assert.ok(packs.length >= 6, `expected builtin packs (targets/patterns/misconceptions/algorithms/pedagogy), got ${packs.length}`);
+    assert.ok(packs.some((p) => p.pack_id === "omac.targets.core" && p.builtin === true));
+    assert.ok(packs.some((p) => p.pack_id === "omac.algorithms.core" && p.builtin === true));
+    assert.ok(packs.some((p) => p.pack_id === "omac.pedagogy.core" && p.builtin === true));
+    const patterns = omac(dir, ["pattern", "list"]);
+    assert.ok((patterns.stdout as { patterns: unknown[] }).patterns.length > 0, "builtin pattern cards must be queryable");
+    const algorithms = omac(dir, ["algorithm", "list"]);
+    assert.ok((algorithms.stdout as { algorithms: unknown[] }).algorithms.length > 0, "builtin algorithm cards must be queryable");
+    const pedagogy = omac(dir, ["pedagogy", "list"]);
+    assert.ok((pedagogy.stdout as { pedagogy: unknown[] }).pedagogy.length > 0, "builtin pedagogy cards must be queryable");
+    const targets = omac(dir, ["targets"]);
+    assert.ok((targets.stdout as { targets: { target_id: string; pack_id?: string }[] }).targets.some((t) => t.target_id === "algo.dp"));
   } finally {
     cleanup(dir);
   }
