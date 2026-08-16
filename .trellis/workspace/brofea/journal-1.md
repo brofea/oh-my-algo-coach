@@ -236,3 +236,36 @@ Rewrote skill/omac into a Codex Skill Creator package with SKILL.md, generated a
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: Chinese OMAC Skill
+
+**Date**: 2026-08-16
+**Task**: Chinese OMAC Skill
+**Branch**: `main`
+
+### Summary
+
+将 skill/omac/SKILL.md 的 frontmatter description 与全部说明性正文改为中文，保留 Event、CLI、字段名和引用路径等协议术语。Skill 校验、typecheck 及 50 个测试通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d7fee93` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
