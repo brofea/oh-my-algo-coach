@@ -203,3 +203,36 @@ V5: rating/calibration, advanced retention decay, coach self-eval + policy + gai
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: Rewrite OMAC Codex Skill
+
+**Date**: 2026-08-16
+**Task**: Rewrite OMAC Codex Skill
+**Branch**: `main`
+
+### Summary
+
+Rewrote skill/omac into a Codex Skill Creator package with SKILL.md, generated agents/openai.yaml, and four progressive-disclosure protocol references aligned to the PRD and CLI contracts. Skill validation, typecheck, and all 50 project tests passed.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `935cd77` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

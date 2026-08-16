@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
+- **Total Sessions**: 7
 - **Last Active**: 2026-08-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~205 | Active |
+| `journal-1.md` | ~238 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-08-16 | Rewrite OMAC Codex Skill | `935cd77` | `main` |
 | 6 | 2026-08-16 | V5 Adaptive Coaching Research & Ecosystem | `666e48116d8affaa7d6826ffbc0f6657e9fed4bd` | `main` |
 | 5 | 2026-08-16 | V4 Contest Domain Pack | `14d49cc3673fcf7f4ee43003d83eb9a1e7e0110c` | `main` |
 | 4 | 2026-08-16 | V3 External Problem Ecosystem & Recommendation | `23f7d67a12e7e8b63693d2f814d334c414fa0d40` | `main` |
