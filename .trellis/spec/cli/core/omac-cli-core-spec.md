@@ -134,3 +134,24 @@ omac recommend --explain <ref>            # 注意: --explain <ref> 中 ref 是 
 - Problem status 存 `learner/state/problem-status.jsonl`。
 - 推荐：排除 solved/attempted；pool = 本地 manifest + connector 缓存；exploitation 按距离估计区间+coverage+novelty 排序；auto 分流（confidence<0.35 或 evidence<3 → exploration）；确定性输出。
 - doctor 返回 connectors 健康检查数组。
+
+## 11. V4 追加（Contest Domain Pack）
+
+### 新命令
+
+```
+omac contest import --artifact <path> [--event-id <id>]
+omac contest timeline --event-id <id>          # 需 event.contest_ref
+omac contest analyze --event-id <id> [--learner-rating]
+omac contest link-upsolve --event-id <id> --upsolve-event <id> [--problem-ref]
+omac contest followups --event-id <id> | --contest-id <id>
+omac view contest
+```
+
+### 契约
+
+- Contest Artifact: `{contest:{id,platform},problems:[{problem_ref,rating,opened_minutes,submissions:[{minutes_used,verdict}]}],switches,abandons,reviewer}`；verdict ∈ AC/WA/TLE/RE/CE/MLE；完整性校验（非空 problems、opened 必须有 submission 或 abandon、时间单调）。
+- 存储 `.omac/artifact/contest/<id>.json`；分析记录 `report/contest-analysis.jsonl`；upsolve 链接 `report/contest-upsolve-links.jsonl`。
+- 损失归因（确定性）：never-opened→algorithm-gap；opened 15–45min 无有效提交→recognition-gap；≥45min→switch-late；≥4 次提交且 debug>thinking→debug-slow；≥2 次提交→implementation-slow（高 rating>+200→risk-management）；AC 且 ≤1 提交→无重大损失。
+- `contest analyze` 写 analysis 记录（contest view 聚合）。
+- 硬约束：Contest 纯赛后；live 请求拒绝；无 Contest Lock / 反作弊（D-011）。

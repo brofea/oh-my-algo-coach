@@ -58,6 +58,7 @@ import {
 import { recordLearnPath, validateLearnPathSteps, listLearnPaths, installPack, installedPacks, prereqOf } from "../services/memory.js";
 import { listConnectors, getConnector, fetchProblem, fetchEditorial, cachedContent, clearConnectorCache, setProblemStatus, problemStatuses } from "../services/ecosystem.js";
 import { recommendProblems, explainRecommendation } from "../services/recommend.js";
+import { importContestArtifact, findContestIdForEvent, contestTimeline, analyzeContest, recordContestAnalysis, contestAbilityView, linkUpsolve, contestFollowups } from "../services/contest.js";
 
 export function cmdInit(ctx: CommandContext): unknown {
   const opts = {
@@ -937,4 +938,52 @@ export function cmdRecommendExplain(ctx: CommandContext): unknown {
   if (!ref) throw new OmacError("missing_flag", "recommend --explain requires <ref>");
   const explanation = explainRecommendation(ctx.cwd, ref);
   return { ok: true, explanation };
+}
+
+export function cmdContestImport(ctx: CommandContext): unknown {
+  const artifact = flag(ctx.args.flags, "artifact") ?? ctx.args.command[2];
+  if (!artifact) throw new OmacError("missing_flag", "contest import requires --artifact <path>");
+  const eventId = flag(ctx.args.flags, "event-id");
+  const result = importContestArtifact(ctx.cwd, artifact, { eventId });
+  return { ok: true, ...result };
+}
+
+export function cmdContestTimeline(ctx: CommandContext): unknown {
+  const eventId = flag(ctx.args.flags, "event-id");
+  if (!eventId) throw new OmacError("missing_flag", "contest timeline requires --event-id");
+  const contestId = findContestIdForEvent(ctx.cwd, eventId);
+  if (!contestId) throw new OmacError("no_contest_ref", "event has no contest_ref");
+  return { ok: true, contest_id: contestId, timeline: contestTimeline(ctx.cwd, contestId) };
+}
+
+export function cmdContestAnalyze(ctx: CommandContext): unknown {
+  const eventId = flag(ctx.args.flags, "event-id");
+  const contestId = flag(ctx.args.flags, "contest-id");
+  if (!eventId && !contestId) throw new OmacError("missing_flag", "contest analyze requires --event-id or --contest-id");
+  const cid = contestId ?? findContestIdForEvent(ctx.cwd, eventId!);
+  if (!cid) throw new OmacError("no_contest_ref", "event has no contest_ref; import the artifact first");
+  const analysis = analyzeContest(ctx.cwd, cid, { learnerRating: flag(ctx.args.flags, "learner-rating") ? Number(flag(ctx.args.flags, "learner-rating")) : undefined });
+  recordContestAnalysis(ctx.cwd, analysis);
+  return { ok: true, analysis };
+}
+
+export function cmdContestLinkUpsolve(ctx: CommandContext): unknown {
+  const eventId = flag(ctx.args.flags, "event-id");
+  const upsolveEvent = flag(ctx.args.flags, "upsolve-event");
+  if (!eventId || !upsolveEvent) throw new OmacError("missing_flag", "contest link-upsolve requires --event-id and --upsolve-event");
+  const result = linkUpsolve(ctx.cwd, eventId, upsolveEvent, flag(ctx.args.flags, "problem-ref"));
+  return { ...result };
+}
+
+export function cmdContestFollowups(ctx: CommandContext): unknown {
+  const eventId = flag(ctx.args.flags, "event-id");
+  const contestId = flag(ctx.args.flags, "contest-id");
+  if (!eventId && !contestId) throw new OmacError("missing_flag", "contest followups requires --event-id or --contest-id");
+  const cid = contestId ?? findContestIdForEvent(ctx.cwd, eventId!);
+  if (!cid) throw new OmacError("no_contest_ref", "event has no contest_ref");
+  return { ok: true, contest_id: cid, ...contestFollowups(ctx.cwd, cid) };
+}
+
+export function cmdViewContest(ctx: CommandContext): unknown {
+  return { ok: true, view: contestAbilityView(ctx.cwd) };
 }

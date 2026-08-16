@@ -104,3 +104,36 @@ V2: retention scheduling, review protocol (5 forms), learn paths, pack install/p
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: V3 External Problem Ecosystem & Recommendation
+
+**Date**: 2026-08-16
+**Task**: V3 External Problem Ecosystem & Recommendation
+**Branch**: `main`
+
+### Summary
+
+V3: connector manifests, provenance cache, editorial degradation, problem status, deterministic recommendation with exploitation/exploration split, pattern association, doctor connector health. 36/36 tests
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `23f7d67a12e7e8b63693d2f814d334c414fa0d40` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -51,6 +51,12 @@ import {
   cmdProblemStatusList,
   cmdRecommend,
   cmdRecommendExplain,
+  cmdContestImport,
+  cmdContestTimeline,
+  cmdContestAnalyze,
+  cmdContestLinkUpsolve,
+  cmdContestFollowups,
+  cmdViewContest,
 } from "./commands/commands.js";
 import { OmacError } from "./core/ids.js";
 
@@ -190,6 +196,7 @@ export async function main(argv: string[]): Promise<void> {
         algorithm: cmdViewAlgorithm,
         "problem-solving": cmdViewProblemSolving,
         misconception: cmdViewMisconception,
+        contest: cmdViewContest,
       }, ctx);
       break;
     case "pack":
@@ -237,6 +244,15 @@ export async function main(argv: string[]): Promise<void> {
       } else {
         result = cmdRecommend(ctx);
       }
+      break;
+    case "contest":
+      result = runSub(command[1], {
+        import: cmdContestImport,
+        timeline: cmdContestTimeline,
+        analyze: cmdContestAnalyze,
+        "link-upsolve": cmdContestLinkUpsolve,
+        followups: cmdContestFollowups,
+      }, ctx);
       break;
     case "doctor":
       result = cmdDoctor(ctx);
