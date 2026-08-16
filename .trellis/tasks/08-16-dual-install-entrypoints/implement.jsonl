@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/cli/core/omac-cli-core-spec.md", "reason": "CLI command, storage, error and idempotency contracts"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Installation source, local filesystem and CLI/Skill data-flow boundaries"}

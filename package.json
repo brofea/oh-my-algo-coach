@@ -8,7 +8,8 @@
   ],
   "scripts": {
     "build": "npm run build -w @omac/cli",
-    "test": "npm run test -w @omac/cli",
+    "test": "npm run test -w @omac/cli && npm run test:bootstrap",
+    "test:bootstrap": "node --test install/cli-bootstrap.test.mjs",
     "typecheck": "npm run typecheck -w @omac/cli",
     "lint": "npm run typecheck && node scripts/check-packs.mjs"
   },

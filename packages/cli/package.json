@@ -2,17 +2,35 @@
   "name": "@omac/cli",
   "version": "0.1.0",
   "description": "OMAC Runtime Engine - TypeScript CLI for the Oh My Algo Coach local coaching loop",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brofea/oh-my-algo-coach.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/brofea/oh-my-algo-coach",
+  "bugs": {
+    "url": "https://github.com/brofea/oh-my-algo-coach/issues"
+  },
+  "keywords": ["algorithm", "coaching", "cli", "learning", "competitive-programming"],
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "bin": {
     "omac": "./dist/index.js"
   },
   "main": "./dist/index.js",
-  "files": ["dist"],
+  "files": ["dist", "skill", "knowledge", "README.md", "LICENSE"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && tsc -p tsconfig.test.json && node --test 'dist-test/test/*.test.js'"
+    "test": "npm run build && tsc -p tsconfig.test.json && node --test 'dist-test/test/*.test.js'",
+    "prepack": "node ../../scripts/prepare-cli-package.mjs prepare",
+    "postpack": "node ../../scripts/prepare-cli-package.mjs clean"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -19,7 +19,7 @@ cd your-project/          # 在项目根目录（.omac 会建在这里）
 node <repo>/packages/cli/dist/index.js init --learner-id <你的ID>
 ```
 
-也可以全局链接后直接使用 `omac`：
+开发者也可以临时全局链接后使用 `omac`；普通项目安装不建议修改全局环境：
 
 ```bash
 cd packages/cli && npm link
@@ -27,6 +27,18 @@ omac init --learner-id alice
 ```
 
 > `.omac/` 可能包含敏感学习数据（弱点、代码、对话、账户信息），**不要**上传到公共仓库；`.gitignore` 由你自行决定，CLI 不会自动修改。
+
+### 从 GitHub Release 安装仓库本地 CLI
+
+CLI 可以安装到当前仓库的 `.agents/cli/`，不会修改全局 npm、Shell 或 PATH：
+
+```bash
+# 在目标仓库根目录执行；Release tag 使用 v主版本.次版本，例如 v0.1
+node <repo>/install/cli-bootstrap.mjs install --version 0.1
+node <repo>/install/cli-bootstrap.mjs run init --learner-id alice
+```
+
+安装器会下载固定版本的 Release Asset，校验 SHA256，并保留旧版本以便失败回退。安装状态记录在 `.agents/cli/current.json`。`omac init` 会把匹配版本的 OMAC Skill 同步到当前仓库的 `.agents/skill/omac/`；不会安装到任何全局 Skill 目录。
 
 ## 一次完整训练闭环
 

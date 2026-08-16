@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "skill_id": "omac-coach",
+  "version": "0.1.0",
+  "protocol_version": "1.0.0",
+  "source": {
+    "type": "github",
+    "repository": "brofea/oh-my-algo-coach",
+    "path": "skill/omac"
+  }
+}

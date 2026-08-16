@@ -10,6 +10,35 @@ Use the local `omac` CLI as the only normal interface to `.omac`. Agent-facing c
 4. Submit Learner State only with `learner claim submit`, only when the Event is `evaluating` or in the close evaluation path. Never write a Learner View directly.
 5. Use `rebuild` to deterministically compute a View from a selected Claim set and reducer version; it must not call an LLM. Use `reevaluate` to append Claims from a new evaluator; it must not rewrite historical Claims.
 
+## Repository-local CLI bootstrap
+
+When this Skill is already present in a repository, its first-run bootstrap is
+environment-aware and repository-local:
+
+1. Check the current repository root, `node --version`, `.agents/cli/current.json`,
+   and `.agents/skill/omac/manifest.json`. Stop with an actionable message when
+   Node.js is below 22; do not install a global runtime or npm package.
+2. If the OMAC repository is checked out locally, use its
+   `install/cli-bootstrap.mjs`. Otherwise fetch that exact file from the
+   repository declared by the Skill manifest into a temporary directory, then
+   run it. Do not write the fetched helper into a global Skill directory.
+3. Install or update the requested GitHub Release and invoke `run init`; the
+   CLI `init` then installs or updates the matching local Skill.
+
+The normal commands are:
+
+```text
+node <omac-repo>/install/cli-bootstrap.mjs install --version <release>
+node <omac-repo>/install/cli-bootstrap.mjs run init --learner-id <id>
+```
+
+The installer stores the CLI under the current repository's `.agents/cli/` and
+validates the GitHub Release asset checksum. `omac init` synchronizes the
+bundled Skill to the current repository's `.agents/skill/omac/` only. It must
+never install a Skill into `~/.agents`, `.codex`, `.claude`, or another global
+directory. If `.agents/skill/omac` exists without an OMAC manifest, preserve it
+and report a conflict unless the user explicitly passes `--force-skill`.
+
 ## Command groups
 
 ### Initialize and inspect

@@ -3,3 +3,5 @@ packages/cli/dist/
 packages/cli/dist-test/
 .opencode/goals/
 .DS_Store
+.agents/skill/
+.agents/cli/

@@ -75,6 +75,7 @@ export function builtinPacksDir(): string {
   const env = process.env.OMAC_BUILTIN_PACKS;
   if (env) return env;
   const candidates = [
+    join(import.meta.dirname, "..", "knowledge", "packs"),
     join(import.meta.dirname, "../../../..", "knowledge", "packs"),
     join(import.meta.dirname, "../../..", "knowledge", "packs"),
   ];

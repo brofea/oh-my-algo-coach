@@ -65,12 +65,14 @@ import { validateArtifact } from "../services/contest.js";
 import { recommendProblems, explainRecommendation } from "../services/recommend.js";
 import { importContestArtifact, findContestIdForEvent, contestTimeline, analyzeContest, recordContestAnalysis, contestAbilityView, linkUpsolve, contestFollowups } from "../services/contest.js";
 import { computeRating, computeCalibration, advancedRetentionStatus, coachEval, coachPolicy, gainMatrix, visualize, longTermPlan, packVersions, updatePack } from "../services/adaptive.js";
+import { syncLocalSkill } from "../services/skill_sync.js";
 
 export function cmdInit(ctx: CommandContext): unknown {
   const opts = {
     learnerId: flag(ctx.args.flags, "learner-id"),
     saveConversation: flagBool(ctx.args.flags, "save-conversation"),
   };
+  const skill = syncLocalSkill(ctx.cwd, { force: flagBool(ctx.args.flags, "force-skill") });
   const config = initWorkspace(ctx.cwd, opts);
   if (!config.learner_id) {
     const learnerId = opts.learnerId ?? `ln-${uuid().slice(0, 12)}`;
@@ -83,6 +85,7 @@ export function cmdInit(ctx: CommandContext): unknown {
     learner_id: final.learner_id,
     schema_version: final.schema_version,
     warning: WARNING_TEXT,
+    skill,
   };
 }
 

@@ -90,6 +90,7 @@ Commands:
   init                              initialize .omac workspace (idempotent)
       --learner-id <id>             bind or create learner identity
       --save-conversation           opt-in raw conversation saving
+      --force-skill                  replace a conflicting .agents/skill/omac directory
   event create                      create a draft event
       --type <learn|practice|upsolve|contest|diagnose|explore>
       --target-ids <a,b>            target contract ids (must resolve; contest requires >= 1)

@@ -116,6 +116,7 @@ description: "运行 Oh My Algo Coach 的长期算法教练闭环。用于 ICPC�
 调用命令前读取 [references/cli-protocol.md](references/cli-protocol.md)。尤其遵循以下规则：
 
 - 使用 `omac init` 初始化；Agent-facing 操作使用项目本地 CLI 和结构化 JSON 输出。
+- `omac init` 会把与当前 CLI 匹配的 OMAC Skill 同步到当前仓库的 `.agents/skill/omac/`；Skill 只允许安装在该仓库路径，不要写入全局 Skill 目录。
 - 使用 `event create`、`event append` 和 `event close` 管理生命周期；使用 `evidence append` 记录 observation、intervention、correction、submission 或 import。
 - 使用 `learner claim submit` 作为唯一正常的 Learner State 写入口；使用 `learner view get` 读取状态。
 - 使用 `rebuild` 在不调用 LLM 的情况下确定性重建 View；使用 `reevaluate` 追加新 Claim，不改写历史。
