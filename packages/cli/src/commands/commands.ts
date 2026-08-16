@@ -1,8 +1,8 @@
-import { rmSync, existsSync } from "node:fs";
+import { rmSync, readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CommandContext, flag, flagBool, outputJson } from "../core/cli.js";
 import { initWorkspace, setLearnerId, readWorkspaceConfig, WARNING_TEXT, requireWorkspace, omacPath } from "../store/workspace.js";
-import { OmacError, uuid } from "../core/ids.js";
+import { OmacError, uuid, nowIso, sha256 } from "../core/ids.js";
 import {
   createEvent,
   loadEventAnywhere,
@@ -31,6 +31,20 @@ import { doctor, integrityCheck } from "../services/doctor.js";
 import { migrateWorkspace } from "../services/migrate.js";
 import { exportPackage, previewImport, importPackage } from "../services/export_import.js";
 import { listTargets } from "../protocol/target.js";
+import {
+  validateHintLevel,
+  validateSubflowKind,
+  validateTransferResult,
+  validateInsightDistance,
+  validateTransferReadiness,
+  validateTeachBackResult,
+  newSubflowId,
+} from "../protocol/coaching.js";
+import { addProblem, listProblems, addArtifact, listArtifacts } from "../store/knowledge_store.js";
+import { appendSubflow, listSubflows } from "../store/subflow_store.js";
+import { algorithmAbilityView, problemSolvingView, misconceptionView, transferProbeSummary } from "../services/coaching_views.js";
+import { recordTransferProbe } from "../store/event_store.js";
+import { TransferProbe, ProblemManifestEntry } from "../core/types.js";
 
 export function cmdInit(ctx: CommandContext): unknown {
   const opts = {
@@ -162,8 +176,28 @@ export function cmdEvidenceAppend(ctx: CommandContext): unknown {
   if (!eventId) throw new OmacError("missing_flag", "evidence append requires --event-id");
   const { event } = loadEventAnywhere(ws.omac, eventId);
   const operationId = flag(ctx.args.flags, "operation-id") ?? `op-${uuid().slice(0, 12)}`;
+  const evidenceType = validateEvidenceType(flag(ctx.args.flags, "type") ?? "observation");
+  const extra: Record<string, unknown> = flag(ctx.args.flags, "extra") ? JSON.parse(flag(ctx.args.flags, "extra")!) : {};
+  if (evidenceType === "intervention") {
+    const intervention: Record<string, unknown> = {
+      intervention_type: flag(ctx.args.flags, "intervention-type") ?? "hint",
+    };
+    if (flag(ctx.args.flags, "hint-level")) {
+      intervention.disclosure_level = validateHintLevel(flag(ctx.args.flags, "hint-level")!);
+    }
+    if (ctx.args.flags.has("student-requested")) {
+      intervention.student_requested = flagBool(ctx.args.flags, "student-requested");
+    }
+    if (flag(ctx.args.flags, "failure-cause")) intervention.failure_cause = flag(ctx.args.flags, "failure-cause");
+    if (flag(ctx.args.flags, "response-evidence-ids")) {
+      intervention.response_evidence_ids = flag(ctx.args.flags, "response-evidence-ids")!.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+    if (flag(ctx.args.flags, "content")) intervention.content = flag(ctx.args.flags, "content");
+    Object.assign(intervention, extra);
+    extra.intervention = intervention;
+  }
   const record = appendEvidence(ctx.cwd, {
-    evidence_type: validateEvidenceType(flag(ctx.args.flags, "type") ?? "observation"),
+    evidence_type: evidenceType,
     event_id: eventId,
     workspace_id: cfg.workspace_id,
     learner_id: event.learner_id,
@@ -183,7 +217,7 @@ export function cmdEvidenceAppend(ctx: CommandContext): unknown {
     extraction_confidence: flag(ctx.args.flags, "extraction-confidence")
       ? Number(flag(ctx.args.flags, "extraction-confidence"))
       : undefined,
-    extra: flag(ctx.args.flags, "extra") ? JSON.parse(flag(ctx.args.flags, "extra")!) : undefined,
+    extra,
   });
   return { ok: true, evidence_id: record.evidence_id, event_id: eventId, operation_id: operationId };
 }
@@ -259,6 +293,28 @@ export function cmdEventAppend(ctx: CommandContext): unknown {
     if (to !== event.status) {
       updateEvent(ws.omac, event);
       transition(ws.omac, event, to);
+    }
+  }
+  const modeFlag = flag(ctx.args.flags, "mode");
+  if (modeFlag) {
+    const to = validateMode(modeFlag);
+    if (to !== event.mode) {
+      const from = event.mode;
+      event.mode = to;
+      updateEvent(ws.omac, event);
+      appendEvidence(ctx.cwd, {
+        evidence_type: "observation",
+        event_id: eventId,
+        workspace_id: event.workspace_id,
+        learner_id: event.learner_id,
+        actor: "runtime",
+        observed_at: nowIso(),
+        content_summary: `coaching mode changed ${from} -> ${to}`,
+        provenance: "cli",
+        evidence_quality: "medium",
+        operation_id: `op-mode-${eventId}-${to}`,
+        extra: { mode_change: { from, to, changed_at: nowIso(), requested_by: flag(ctx.args.flags, "mode-requested-by") ?? "learner" } },
+      });
     }
   }
   return { ok: true, event_id: eventId, operation_id: logEntry.operation_id };
@@ -468,4 +524,136 @@ export function cmdTargets(ctx: CommandContext): unknown {
       version: t.target_version,
     })),
   };
+}
+
+export function cmdProblemAdd(ctx: CommandContext): unknown {
+  const manifestPath = flag(ctx.args.flags, "manifest");
+  if (manifestPath) {
+    if (!existsSync(manifestPath)) throw new OmacError("file_not_found", `manifest not found: ${manifestPath}`);
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { problems?: Omit<ProblemManifestEntry, "added_at">[]; problem_ref?: string; platform?: string; difficulty?: string; rating?: number; statement_ref?: string; tags?: string[] };
+    const list = manifest.problems ?? [{ problem_ref: manifest.problem_ref ?? "", platform: manifest.platform, difficulty: manifest.difficulty, rating: manifest.rating, statement_ref: manifest.statement_ref, tags: manifest.tags }];
+    if (list.length === 0 || list[0].problem_ref === "") {
+      throw new OmacError("validation_error", "manifest must contain problems[] with problem_ref");
+    }
+    const added = list.map((p) => addProblem(ctx.cwd, p));
+    return { ok: true, added };
+  }
+  const problemRef = flag(ctx.args.flags, "problem-ref") ?? ctx.args.command[2];
+  if (!problemRef) throw new OmacError("missing_flag", "problem add requires --problem-ref or positional");
+  const statementRef = flag(ctx.args.flags, "statement");
+  if (statementRef && !existsSync(statementRef)) {
+    throw new OmacError("file_not_found", `statement file not found: ${statementRef}`);
+  }
+  const entry = addProblem(ctx.cwd, {
+    problem_ref: problemRef,
+    platform: flag(ctx.args.flags, "platform"),
+    difficulty: flag(ctx.args.flags, "difficulty"),
+    rating: flag(ctx.args.flags, "rating") ? Number(flag(ctx.args.flags, "rating")) : undefined,
+    statement_ref: statementRef,
+    samples_ref: flag(ctx.args.flags, "samples"),
+    tags: (flag(ctx.args.flags, "tags") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+    editorial_ref: flag(ctx.args.flags, "editorial"),
+    source_url: flag(ctx.args.flags, "source-url"),
+  });
+  return { ok: true, problem: entry };
+}
+
+export function cmdProblemList(ctx: CommandContext): unknown {
+  return { ok: true, problems: listProblems(ctx.cwd, flag(ctx.args.flags, "platform")) };
+}
+
+export function cmdArtifactAdd(ctx: CommandContext): unknown {
+  const eventId = flag(ctx.args.flags, "event-id");
+  const filePath = flag(ctx.args.flags, "file");
+  const kind = flag(ctx.args.flags, "kind") ?? "code";
+  if (!eventId) throw new OmacError("missing_flag", "artifact add requires --event-id");
+  if (!filePath) throw new OmacError("missing_flag", "artifact add requires --file");
+  if (!existsSync(filePath)) throw new OmacError("file_not_found", `file not found: ${filePath}`);
+  const content = readFileSync(filePath, "utf8");
+  const checksum = `sha256:${sha256(content).slice(0, 32)}`;
+  const ws = requireWorkspace(ctx.cwd);
+  const destDir = join(ws.omac, "artifact", eventId);
+  const destFile = join(destDir, filePath.split("/").pop() ?? "artifact");
+  mkdirSync(destDir, { recursive: true });
+  writeFileSync(destFile, content, "utf8");
+  const relPath = `artifact/${eventId}/${filePath.split("/").pop() ?? "artifact"}`;
+  const record = addArtifact(ctx.cwd, { eventId, kind: kind as "code", filePath, relPath, checksum });
+  return { ok: true, artifact: record, checksum, stored_at: destFile };
+}
+
+export function cmdArtifactList(ctx: CommandContext): unknown {
+  return { ok: true, artifacts: listArtifacts(ctx.cwd, flag(ctx.args.flags, "event-id")) };
+}
+
+export function cmdTransferProbeAdd(ctx: CommandContext): unknown {
+  const ws = requireWorkspace(ctx.cwd);
+  const cfg = readWorkspaceConfig(ctx.cwd);
+  const eventId = flag(ctx.args.flags, "event-id");
+  const targetId = flag(ctx.args.flags, "target-id");
+  if (!eventId) throw new OmacError("missing_flag", "transfer-probe add requires --event-id");
+  if (!targetId) throw new OmacError("missing_flag", "transfer-probe add requires --target-id");
+  const { event, archived } = loadEventAnywhere(ws.omac, eventId);
+  if (archived) throw new OmacError("invalid_state", "cannot add transfer probe to archived event");
+  const result = validateTransferResult(flag(ctx.args.flags, "result") ?? "unknown");
+  const probe: TransferProbe = {
+    probe_id: `prb-${nowIso().slice(0, 19).replace(/[^0-9]/g, "")}`,
+    event_id: eventId,
+    target_id: targetId,
+    problem_ref: flag(ctx.args.flags, "problem-ref") ?? event.problem_ref,
+    statement_hash: flag(ctx.args.flags, "statement-hash"),
+    declared_before_start: flagBool(ctx.args.flags, "declared-before-start"),
+    similarity_rule_ref: flag(ctx.args.flags, "similarity-rule"),
+    problem_familiarity: flag(ctx.args.flags, "familiarity"),
+    prior_exposure: flag(ctx.args.flags, "prior-exposure") ? flagBool(ctx.args.flags, "prior-exposure") : undefined,
+    editorial_exposure: flag(ctx.args.flags, "editorial-exposure") ? flagBool(ctx.args.flags, "editorial-exposure") : undefined,
+    external_help: flag(ctx.args.flags, "external-help") ? flagBool(ctx.args.flags, "external-help") : undefined,
+    result,
+    criteria_met: flag(ctx.args.flags, "criteria-met") ? flagBool(ctx.args.flags, "criteria-met") : undefined,
+    evidence_ids: (flag(ctx.args.flags, "evidence-ids") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+  };
+  recordTransferProbe(ws.omac, eventId, probe);
+  void cfg;
+  return { ok: true, probe };
+}
+
+export function cmdSubflow(ctx: CommandContext): unknown {
+  const ws = requireWorkspace(ctx.cwd);
+  const eventId = flag(ctx.args.flags, "event-id");
+  if (!eventId) throw new OmacError("missing_flag", "subflow requires --event-id");
+  const { event, archived } = loadEventAnywhere(ws.omac, eventId);
+  if (archived) throw new OmacError("invalid_state", "cannot modify archived event");
+  const kind = validateSubflowKind(flag(ctx.args.flags, "kind") ?? "");
+  const record = {
+    subflow_id: newSubflowId(),
+    event_id: eventId,
+    kind,
+    started_at: nowIso(),
+    evidence_ids: [],
+    debug: kind === "debug" ? { wa_types: (flag(ctx.args.flags, "wa-types") ?? "").split(",").map((s) => s.trim()).filter(Boolean), verdicts: (flag(ctx.args.flags, "verdicts") ?? "").split(",").map((s) => s.trim()).filter(Boolean), resolved: flag(ctx.args.flags, "resolved") ? flagBool(ctx.args.flags, "resolved") : undefined, root_cause: flag(ctx.args.flags, "root-cause") } : undefined,
+    postmortem: kind === "postmortem" ? { original_direction: flag(ctx.args.flags, "original-direction"), failure_cause: flag(ctx.args.flags, "failure-cause"), insight_distance: flag(ctx.args.flags, "insight-distance") ? validateInsightDistance(flag(ctx.args.flags, "insight-distance")!) : undefined, pattern_extracted: flag(ctx.args.flags, "pattern"), anchor_algorithm: flag(ctx.args.flags, "anchor"), gave_up_early: flag(ctx.args.flags, "gave-up-early") ? flagBool(ctx.args.flags, "gave-up-early") : undefined, hint_too_early: flag(ctx.args.flags, "hint-too-early") ? flagBool(ctx.args.flags, "hint-too-early") : undefined } : undefined,
+    teach_back: kind === "teach-back" ? { result: validateTeachBackResult(flag(ctx.args.flags, "result") ?? "fail"), content: flag(ctx.args.flags, "content") } : undefined,
+    upsolve_review: kind === "upsolve-review" ? { original_direction: flag(ctx.args.flags, "original-direction"), failure_cause: flag(ctx.args.flags, "failure-cause"), insight_distance: flag(ctx.args.flags, "insight-distance") ? validateInsightDistance(flag(ctx.args.flags, "insight-distance")!) : undefined, key_insight: flag(ctx.args.flags, "key-insight"), pattern_extraction: flag(ctx.args.flags, "pattern"), transfer_readiness: flag(ctx.args.flags, "transfer-readiness") ? validateTransferReadiness(flag(ctx.args.flags, "transfer-readiness")!) : undefined, follow_up_target_ids: (flag(ctx.args.flags, "follow-up-targets") ?? "").split(",").map((s) => s.trim()).filter(Boolean) } : undefined,
+  };
+  appendSubflow(ctx.cwd, record);
+  return { ok: true, subflow: record };
+}
+
+export function cmdSubflowList(ctx: CommandContext): unknown {
+  return { ok: true, subflows: listSubflows(ctx.cwd, flag(ctx.args.flags, "event-id")) };
+}
+
+export function cmdViewAlgorithm(ctx: CommandContext): unknown {
+  return { ok: true, view: algorithmAbilityView(ctx.cwd) };
+}
+
+export function cmdViewProblemSolving(ctx: CommandContext): unknown {
+  return { ok: true, view: problemSolvingView(ctx.cwd) };
+}
+
+export function cmdViewMisconception(ctx: CommandContext): unknown {
+  return { ok: true, view: misconceptionView(ctx.cwd) };
+}
+
+export function cmdTransferSummary(ctx: CommandContext): unknown {
+  return { ok: true, summary: transferProbeSummary(ctx.cwd, flag(ctx.args.flags, "event-id")) };
 }

@@ -60,3 +60,35 @@ omac doctor | integrity | migrate | export --learner-id <id> | import <pkg> [--p
 
 - Wrong: 在 `active` 阶段直接 `learner claim submit`（被接受）→ 违反 D-013。
 - Correct: 仅 `evaluating` 阶段允许；`close` 内部先转 evaluating 再推进。
+
+## 8. V1 追加（Coaching Effectiveness）
+
+### 新命令
+
+```
+omac problem add --manifest <path> | --problem-ref <ref> [--platform --difficulty --rating --statement --tags]
+omac problem list [--platform]
+omac artifact add --event-id <id> --file <path> [--kind code|statement|submission|editorial]
+omac artifact list [--event-id]
+omac transfer-probe add --event-id <id> --target-id <t> --result <r> [--declared-before-start --prior-exposure --editorial-exposure --external-help --evidence-ids]
+omac transfer-probe summary [--event-id]
+omac subflow add --event-id <id> --kind debug|postmortem|teach-back|upsolve-review [kind-specific flags]
+omac subflow list [--event-id]
+omac view algorithm | problem-solving | misconception
+omac event append ... --mode <mode> [--mode-requested-by learner|coach]   # 记录 mode 变更为 runtime evidence
+```
+
+### 契约
+
+- Intervention evidence: `extra.intervention = {intervention_type, disclosure_level(L0-L7), student_requested, failure_cause, response_evidence_ids, content}`。
+- 子流程存储 `event/subflows.jsonl`（JSONL append）；transfer probe 存储 `event/<id>/transfer-probes.jsonl`。
+- Problem manifest 存储 `knowledge/problems.jsonl`；artifact 文件复制到 `.omac/artifact/<event-id>/`，索引在 `artifact/index.jsonl`。
+- mode 变更写入 `evidence.jsonl`（actor=runtime, extra.mode_change={from,to,changed_at,requested_by}）。
+
+### 错误
+
+| code | 触发 |
+|---|---|
+| `invalid hint level` | hint-level 非 L0-L7 |
+| `invalid transfer result` | result 非 4 值 |
+| `subflow_not_found` | subflow 不存在 |

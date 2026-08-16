@@ -28,6 +28,146 @@ export interface IndependenceBoundary {
   captured_at: string;
 }
 
+export type HintLevel = "L0" | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7";
+
+export type InterventionType =
+  | "hint"
+  | "question"
+  | "counterexample"
+  | "teach-back"
+  | "postmortem"
+  | "visualization"
+  | "direct-explanation"
+  | "debug-guidance";
+
+export interface InterventionRecord {
+  intervention_type: InterventionType;
+  disclosure_level?: HintLevel;
+  student_requested?: boolean;
+  failure_cause?: string;
+  response_evidence_ids?: string[];
+  content?: string;
+}
+
+export type SubflowKind = "debug" | "postmortem" | "teach-back" | "upsolve-review";
+
+export interface DebugSubflowRecord {
+  code_attempts?: number;
+  wa_types?: string[];
+  verdicts?: string[];
+  debug_started_at?: string;
+  debug_duration_minutes?: number;
+  root_cause?: string;
+  counterexample_found?: boolean;
+  resolved?: boolean;
+}
+
+export interface PostmortemRecord {
+  original_direction?: string;
+  failure_cause?: string;
+  insight_distance?: "far" | "medium" | "near";
+  pattern_extracted?: string;
+  anchor_algorithm?: string;
+  gave_up_early?: boolean;
+  hint_too_early?: boolean;
+  wrong_direction_duration_minutes?: number;
+}
+
+export interface TeachBackRecord {
+  result: "recall" | "explain" | "reimplement" | "transfer" | "fail";
+  content?: string;
+  evaluated_at?: string;
+}
+
+export interface UpsolveReviewRecord {
+  original_direction?: string;
+  failure_cause?: string;
+  insight_distance?: "far" | "medium" | "near";
+  key_insight?: string;
+  pattern_extraction?: string;
+  transfer_readiness?: "not-ready" | "ready-with-hint" | "ready";
+  follow_up_target_ids?: string[];
+}
+
+export interface SubflowRecord {
+  subflow_id: string;
+  event_id: string;
+  kind: SubflowKind;
+  started_at: string;
+  ended_at?: string;
+  evidence_ids: string[];
+  debug?: DebugSubflowRecord;
+  postmortem?: PostmortemRecord;
+  teach_back?: TeachBackRecord;
+  upsolve_review?: UpsolveReviewRecord;
+}
+
+export interface ProblemManifestEntry {
+  problem_ref: string;
+  platform?: string;
+  difficulty?: string;
+  rating?: number;
+  statement_ref?: string;
+  samples_ref?: string;
+  tags?: string[];
+  editorial_ref?: string;
+  source_url?: string;
+  retrieved_at?: string;
+  added_at: string;
+}
+
+export interface ArtifactRecord {
+  artifact_id: string;
+  event_id: string;
+  kind: "code" | "statement" | "submission" | "editorial" | "contest";
+  file_path: string;
+  rel_path: string;
+  sha256: string;
+  added_at: string;
+}
+
+export interface SkillDimensionEstimate {
+  dimension: string;
+  status: AssessmentValue;
+  evidence_count: number;
+  evidence_ids: string[];
+  last_seen?: string;
+}
+
+export interface AlgorithmAbilityViewEntry {
+  skill_id: string;
+  overall: AssessmentValue;
+  dimensions: Record<string, SkillDimensionEstimate>;
+  estimate?: [number, number];
+  confidence: number;
+  evidence_count: number;
+}
+
+export interface ProblemSolvingViewEntry {
+  skill_id: string;
+  overall: AssessmentValue;
+  evidence_count: number;
+  confidence: number;
+  trend?: "up" | "down" | "flat";
+}
+
+export interface TransferProbeSummary {
+  total: number;
+  independent_success: number;
+  assisted_success: number;
+  fail: number;
+  unknown: number;
+}
+
+export interface CoachingModeChange {
+  event_id: string;
+  from: CoachingMode;
+  to: CoachingMode;
+  changed_at: string;
+  requested_by: "learner" | "coach";
+  evidence_id?: string;
+}
+
 export interface IndependenceResult {
   independence_status: IndependenceStatus;
   first_intervention_at?: string;

@@ -89,7 +89,6 @@ export function createEvent(opts: {
   ensureDir(dir);
   writeJson(eventPath(ws.omac, id), record);
   writeJson(join(dir, BOUNDARY_FILE), []);
-  writeJson(join(dir, TRANSFER_FILE), []);
   appendJsonl(join(dir, EVENT_LOG), { op: "created", at: now });
   return record;
 }

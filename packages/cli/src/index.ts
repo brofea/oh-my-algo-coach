@@ -20,6 +20,17 @@ import {
   cmdExport,
   cmdImport,
   cmdTargets,
+  cmdProblemAdd,
+  cmdProblemList,
+  cmdArtifactAdd,
+  cmdArtifactList,
+  cmdTransferProbeAdd,
+  cmdSubflow,
+  cmdSubflowList,
+  cmdViewAlgorithm,
+  cmdViewProblemSolving,
+  cmdViewMisconception,
+  cmdTransferSummary,
 } from "./commands/commands.js";
 import { OmacError } from "./core/ids.js";
 
@@ -133,6 +144,25 @@ export async function main(argv: string[]): Promise<void> {
       break;
     case "targets":
       result = cmdTargets(ctx);
+      break;
+    case "problem":
+      result = runSub(command[1], { add: cmdProblemAdd, list: cmdProblemList }, ctx);
+      break;
+    case "artifact":
+      result = runSub(command[1], { add: cmdArtifactAdd, list: cmdArtifactList }, ctx);
+      break;
+    case "transfer-probe":
+      result = runSub(command[1], { add: cmdTransferProbeAdd, summary: cmdTransferSummary }, ctx);
+      break;
+    case "subflow":
+      result = runSub(command[1], { add: cmdSubflow, list: cmdSubflowList }, ctx);
+      break;
+    case "view":
+      result = runSub(command[1], {
+        algorithm: cmdViewAlgorithm,
+        "problem-solving": cmdViewProblemSolving,
+        misconception: cmdViewMisconception,
+      }, ctx);
       break;
     case "doctor":
       result = cmdDoctor(ctx);

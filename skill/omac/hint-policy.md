@@ -55,3 +55,10 @@ Hint Level 是 Intervention 的摘要字段，**不能独立代表帮助强度**
 - **Direct Explanation**：用户明确要求完整解释；结果标记为 Assisted，不作为独立解题证据
 
 Coach 可以建议 Mode，用户拥有最终选择权。
+
+## 6. V1 运行时协议补充
+
+- Hint Level 以 `L0`–`L7` 枚举存储于 intervention evidence 的 `extra.intervention.disclosure_level`。
+- Intervention Evidence 结构化字段：`intervention_type`、`disclosure_level`、`student_requested`、`failure_cause`、`response_evidence_ids`、`content`（CLI：`evidence append --type intervention --intervention-type ... --hint-level ...`）。
+- 子流程（subflow）协议：debug / postmortem / teach-back / upsolve-review，记录于 `event/subflows.jsonl`（CLI：`subflow add --kind ...`）。
+- Transfer Probe 运行时协议：`transfer-probe add --event-id --target-id --result --declared-before-start [--prior-exposure] [--editorial-exposure] [--external-help]`；汇总见 `transfer-probe summary`。
