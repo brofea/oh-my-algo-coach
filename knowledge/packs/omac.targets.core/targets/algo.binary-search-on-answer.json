@@ -1,0 +1,21 @@
+{
+  "target_id": "algo.binary-search-on-answer",
+  "target_version": "1.0.0",
+  "name": "Binary Search on Answer",
+  "category": "algorithm",
+  "prerequisites": ["algo.binary-search.basic", "concept.monotonic-predicate"],
+  "observable_behaviors": [
+    "recognizes maximization of minimum / minimization of maximum patterns",
+    "fixes answer x and checks feasibility",
+    "argues monotonicity of the feasibility predicate"
+  ],
+  "success_criteria": [
+    "learner identifies the fixed-answer feasibility check pattern",
+    "learner argues the predicate is monotone",
+    "learner implements the check function correctly"
+  ],
+  "failure_taxonomy": ["answer-must-exist-in-array", "boundary-confusion", "non-monotone-predicate"],
+  "required_evidence": ["observation.monotonicity-discovery", "submission.verdict"],
+  "evaluation_rubric": { "levels": ["unknown", "observed", "assisted", "independent"] },
+  "assessment_scale": "levels"
+}

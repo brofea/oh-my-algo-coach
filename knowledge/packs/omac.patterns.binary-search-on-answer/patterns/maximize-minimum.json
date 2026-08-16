@@ -1,0 +1,12 @@
+{
+  "pattern_id": "pattern.maximize-minimum",
+  "name": "Maximize the Minimum",
+  "observation": ["answer is a minimum that must be as large as possible", "constraints suggest a feasibility check is cheap"],
+  "transformation": ["fix candidate answer x", "check whether x is feasible"],
+  "pattern": "feasibility predicate is monotone in x",
+  "candidate_techniques": ["algo.binary-search-on-answer"],
+  "related_targets": ["algo.binary-search-on-answer"],
+  "example_problems": ["cf:2065C"],
+  "version": "1.0.0",
+  "source": "omac-created"
+}

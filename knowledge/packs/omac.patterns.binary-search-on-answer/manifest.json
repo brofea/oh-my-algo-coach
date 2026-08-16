@@ -1,0 +1,9 @@
+{
+  "pack_id": "omac.patterns.binary-search-on-answer",
+  "pack_version": "1.0.0",
+  "name": "Binary Search on Answer Patterns",
+  "kind": "pattern",
+  "source_type": "omac-created",
+  "license": "MIT",
+  "content_files": ["patterns/maximize-minimum.json"]
+}

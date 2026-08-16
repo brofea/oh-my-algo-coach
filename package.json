@@ -1,0 +1,17 @@
+{
+  "name": "oh-my-algo-coach",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Oh My Algo Coach (OMAC) - Personal Adaptive Algorithm Coaching Harness",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @omac/cli",
+    "test": "npm run test -w @omac/cli",
+    "typecheck": "npm run typecheck -w @omac/cli"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

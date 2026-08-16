@@ -1,0 +1,21 @@
+{
+  "name": "@omac/cli",
+  "version": "0.1.0",
+  "description": "OMAC Runtime Engine - TypeScript CLI for the Oh My Algo Coach local coaching loop",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "omac": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && tsc -p tsconfig.test.json && node --test 'dist-test/test/*.test.js'"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}

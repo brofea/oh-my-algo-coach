@@ -1,0 +1,9 @@
+{
+  "pack_id": "omac.misconceptions.binary-search",
+  "pack_version": "1.0.0",
+  "name": "Binary Search Misconceptions",
+  "kind": "misconception",
+  "source_type": "omac-created",
+  "license": "MIT",
+  "content_files": ["misconceptions/binary-search-common.json"]
+}

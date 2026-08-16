@@ -1,0 +1,35 @@
+{
+  "target_id": "skill.problem-solving.state-design",
+  "target_version": "1.0.0",
+  "name": "DP State Design",
+  "category": "problem-solving",
+  "prerequisites": ["algo.dp.basic"],
+  "observable_behaviors": [
+    "states what the state represents",
+    "identifies information the state must retain",
+    "points out prerequisite states of the transition",
+    "validates state sufficiency with boundary cases or counterexamples"
+  ],
+  "success_criteria": [
+    "learner can explain what the state represents",
+    "learner can state which information the state must retain",
+    "learner can point out the prerequisite states the transition depends on",
+    "learner can validate whether the state is sufficient with a boundary case or counterexample",
+    "learner transfers to a new statement without an explicit algorithm name"
+  ],
+  "failure_taxonomy": [
+    "state-stores-too-much",
+    "state-stores-too-little",
+    "transition-direction-confusion",
+    "missing-boundary"
+  ],
+  "required_evidence": ["observation.student-state-explanation", "observation.transition-derivation"],
+  "transfer_probe": "unlabeled-variant-1",
+  "evaluation_rubric": { "levels": ["unknown", "observed", "assisted", "independent", "transferred"] },
+  "assessment_scale": "levels",
+  "independence_boundary_defaults": {
+    "editorial_exposure": false,
+    "algorithm_name_disclosed": false,
+    "external_help": false
+  }
+}

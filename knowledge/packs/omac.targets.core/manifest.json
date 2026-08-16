@@ -1,0 +1,13 @@
+{
+  "pack_id": "omac.targets.core",
+  "pack_version": "1.0.0",
+  "name": "Core Target Contracts",
+  "kind": "target",
+  "source_type": "omac-created",
+  "license": "MIT",
+  "content_files": [
+    "targets/skill.problem-solving.state-design.json",
+    "targets/algo.binary-search-on-answer.json"
+  ],
+  "description": "V0 基础 Target Contract 集合，供 Practice / Learn / Upsolve Event 引用"
+}

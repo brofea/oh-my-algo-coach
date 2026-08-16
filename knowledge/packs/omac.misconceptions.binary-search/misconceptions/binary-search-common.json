@@ -1,0 +1,18 @@
+{
+  "misconceptions": [
+    {
+      "id": "binary-search.answer-must-exist-in-array",
+      "description": "Student believes binary search requires the answer to exist in the input array",
+      "related_targets": ["algo.binary-search-on-answer"],
+      "suggested_interventions": ["counterexample: search over answer space not array"],
+      "version": "1.0.0"
+    },
+    {
+      "id": "binary-search.boundary-confusion",
+      "description": "Student confuses l/mid/r boundary updates (off-by-one / infinite loop)",
+      "related_targets": ["algo.binary-search-on-answer"],
+      "suggested_interventions": ["invariant clarification", "code trace with small cases"],
+      "version": "1.0.0"
+    }
+  ]
+}
